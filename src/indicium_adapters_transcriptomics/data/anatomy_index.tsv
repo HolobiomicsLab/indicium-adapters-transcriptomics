@@ -1,0 +1,5 @@
+term	uberon	label	description	source
+mesentery	UBERON:0002095	mesentery	Anatomical organ component composed of a double layer of serous membrane that suspends a viscus from the body wall or connects adjacent viscera and in doing so conveys blood vessels, lymphatics and nerves to and from the viscera. Examples: greater omentum, broad ligament of uterus, sigmoid mesocolon.	Cheung 2024
+pharynx	UBERON:0006562	pharynx	The pharynx is the part of the digestive system immediately posterior to the mouth[GO].	Cheung 2024
+body wall	UBERON:0000309	body wall	The external portion of an animal body derived from ectoderm and mesoderm layers that encloses the body cavity.	Cheung 2024
+organism subdivision	UBERON:0000475	organism subdivision	Anatomical structure which is a subdivision of a whole organism, consisting of components of multiple anatomical systems, largely surrounded by a contiguous region of integument.	general

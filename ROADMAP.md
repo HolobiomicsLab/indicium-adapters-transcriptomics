@@ -41,14 +41,32 @@ new benchmark papers reveal the need.
   Nematostella) with a full xref map for downstream consumers.
 - Unit tests round-trip a representative sample.
 
-### v0.2.0 — SingleCell enrichment (CL + UBERON)
-- `SingleCellTranscriptomicsAdapter.enrich_claim()` gets a real
-  implementation: lookup cell-type subjects/objects against a bundled CL
-  subset, tissue/anatomy literals against UBERON.
-- Bundled CL + UBERON subsets via `data/build_vocabs.py`.
-- Driven by a reference scRNA paper supplied by the intern; the bundled
-  vocabulary subsets are scoped to terms exercised by that paper, expanded
-  as additional papers reveal the need.
+### v0.2.0 — SingleCell anatomy enrichment (UBERON, done)
+- `SingleCellTranscriptomicsAdapter.enrich_claim()` resolves anatomy terms
+  in `subject` / `object` to UBERON CURIEs via a small hand-curated bundled
+  index (4 verified entries from Cheung et al. 2024).
+- `data/build_anatomy_index.py` maintainer script verifies every candidate
+  CURIE against the EBI OLS4 UBERON index; only exact-label matches are
+  kept (no hyponym promotion).
+- Cnidarian-specific terms (physa, mesoglea, gastrodermis, oral / aboral
+  pole, body column, polyp body form) are deliberately triaged out — UBERON
+  has no entry for them as of 2026. Listed in
+  `data/build_anatomy_index.py:TRIAGED_OUT_KNOWN_CNIDARIAN`.
+
+### v0.2.1 — SingleCell cell-type enrichment (CL)
+- Add CL (Cell Ontology) lookup for the cell-type qualifiers
+  (`marker_of_cell_type`, `enriched_in_cluster`,
+  `co_expressed_in_cell_type`).
+- Driven by an scRNA-seq reference paper (e.g. Sebé-Pedrós et al. 2018
+  whole-organism *Nematostella* cell-type atlas).
+- Same build pattern as v0.2.0: maintainer script hits OLS4 CL endpoint,
+  exact-label match only.
+
+### v0.3.0+ — broader coverage
+- Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO so
+  future versions don't need to triage them out.
+- Allow alternative ontology prefixes in the anatomy index (e.g. GO for
+  extracellular matrix, NCBITaxon for organism-context claims).
 
 ### v0.3.0+ — broader gene-name coverage and parsers
 - Extend the gene-name index to mouse (MGI), zebrafish (ZFIN), Drosophila

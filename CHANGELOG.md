@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.2.0 — UBERON anatomy enrichment for SingleCellTranscriptomicsAdapter (2026-05-26)
+
+### Added
+
+- `data/build_anatomy_index.py` maintainer script that resolves a curated
+  list of anatomy terms (drawn from the Cheung et al. 2024 Tomo-seq paper
+  on *Nematostella vectensis*) against the EBI OLS4 UBERON index. Only
+  entries whose returned label exactly matches the query are written —
+  hyponym promotion (e.g. *"nasal tentacle"* for query *"tentacle"*)
+  cannot slip through.
+- Bundled `data/anatomy_index.tsv` (4 verified UBERON anchors for v0.2.0):
+  `mesentery` (UBERON:0002095), `pharynx` (UBERON:0006562), `body wall`
+  (UBERON:0000309), `organism subdivision` (UBERON:0000475). The bundle
+  is deliberately small — UBERON has no entry for cnidarian-specific
+  concepts (physa, mesoglea, gastrodermis, polyp body form, oral / aboral
+  pole, body column), so the build script documents them in
+  `TRIAGED_OUT_KNOWN_CNIDARIAN` rather than emitting wrong CURIEs.
+- `_enrichment.AnatomyIndex` real lookup class loading the bundled TSV at
+  import time. Accepts an anatomical term (case-insensitive) and also
+  matches against the UBERON `label` field; returns the full row dict
+  or `None`.
+- `SingleCellTranscriptomicsAdapter.enrich_claim()` now resolves anatomy
+  terms in `subject` / `object` to their UBERON CURIE under
+  `ontology_terms[slot]` and attaches the label + description under
+  `xrefs[slot]` so consumers can render without an OLS4 round-trip.
+- 7 regression tests covering: case-insensitive anatomy lookup, UBERON
+  CURIE attachment, xref shape, both subject / object slots resolved,
+  cnidarian-specific terms left untouched (no invented CURIEs).
+
+### Notes
+
+- Cell-type enrichment via the Cell Ontology (CL) for the cell-type
+  qualifiers (`marker_of_cell_type`, `enriched_in_cluster`,
+  `co_expressed_in_cell_type`) is scheduled for v0.2.1 once an
+  scRNA-seq reference paper is selected.
+- The four cnidarian-specific terms triaged out in v0.2.0 are candidates
+  for a v0.3.0 effort to contribute them upstream to UBERON, or to allow
+  alternative ontology prefixes (e.g. CARO, GO for ECM) in the anatomy
+  index.
+
 ## v0.1.2 — comprehensive HGNC + Nematostella gene index (2026-05-26)
 
 ### Added

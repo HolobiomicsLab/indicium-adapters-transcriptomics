@@ -6,20 +6,28 @@ generic expression assertions and study-level workflow qualifiers live in the
 bulk adapter; this one adds the qualifiers that only make sense once you have
 per-cell or per-spot resolution.
 
-v0.1.0 ships the adapter structure (qualifiers, prefix map, extraction
-context) but ``enrich_claim()`` is a no-op pass-through pending the v0.2.0
-reference paper that will anchor the CL (Cell Ontology) and UBERON enrichment
-lookups.
+v0.2.0 ships UBERON anatomy enrichment for the spatial-localisation
+qualifiers (``localized_in_tissue``, ``localized_in_spatial_domain``).
+Cell-type (CL ontology) enrichment for the cell-type qualifiers is on the
+v0.2.1 roadmap.
 """
 from __future__ import annotations
 
 from importlib.resources import files
+from typing import Final
 
 import rdflib
 
+from indicium_adapters_transcriptomics._enrichment import ANATOMY_INDEX
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 
 __all__ = ["SingleCellTranscriptomicsAdapter"]
+
+
+# Slot names that may carry an anatomical term and therefore benefit from
+# UBERON lookup. Object-side mostly — the spatial qualifiers describe a gene
+# (subject) localised in a tissue (object).
+_ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 
 
 class SingleCellTranscriptomicsAdapter:
@@ -62,14 +70,43 @@ class SingleCellTranscriptomicsAdapter:
         )
 
     def enrich_claim(self, claim: dict) -> dict:
-        """No-op pass-through in v0.1.0.
+        """Enrich a claim with UBERON CURIEs for anatomical terms.
 
-        CL (cell type) + UBERON (anatomy) enrichment lookups land in v0.2.0
-        once a reference single-cell paper anchors which terms to bundle.
-        Returns a defensive shallow copy so callers can safely mutate the
-        result without affecting the input.
+        v0.2.0 behaviour: recognise anatomy names in ``subject`` /
+        ``object`` and attach them to ``ontology_terms`` (UBERON CURIE) and
+        ``xrefs`` (label + description). The bundled set is small and
+        verified against UBERON; cnidarian-specific terms (physa, mesoglea,
+        gastrodermis, etc.) are absent because UBERON has no entry for
+        them as of 2026 — see ``data/build_anatomy_index.py`` for the
+        triaged-out list.
+
+        Cell-type lookup (CL ontology) is on the v0.2.1 roadmap.
+
+        Pure function — never mutates the input dict.
         """
-        return dict(claim)
+        claim = dict(claim)
+        if "ontology_terms" in claim:
+            claim["ontology_terms"] = dict(claim["ontology_terms"])
+        if "xrefs" in claim:
+            claim["xrefs"] = dict(claim["xrefs"])
+
+        for slot in _ENRICHABLE_SLOTS:
+            name = (claim.get(slot) or "").strip()
+            if not name:
+                continue
+            if row := ANATOMY_INDEX.lookup(name):
+                claim.setdefault("ontology_terms", {})[slot] = row["uberon"]
+                # Xrefs: label + description so consumers can render the
+                # CURIE without an OLS4 round-trip.
+                xrefs_slot = {
+                    "uberon": row["uberon"],
+                    "label": row["label"],
+                }
+                if row.get("description"):
+                    xrefs_slot["description"] = row["description"]
+                claim.setdefault("xrefs", {})[slot] = xrefs_slot
+
+        return claim
 
     def shacl_shapes(self) -> rdflib.Graph:
         """Return ASB-claim SHACL shapes (CURIE format validation only).

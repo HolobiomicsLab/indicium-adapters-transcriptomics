@@ -91,3 +91,64 @@ class GeneIndex:
 
 
 GENE_INDEX: Final[GeneIndex] = GeneIndex(_load_gene_index_rows())
+
+
+# --- Anatomy index (v0.2.0) -------------------------------------------------
+
+_ANATOMY_INDEX_COLUMNS: Final[tuple[str, ...]] = (
+    "term", "uberon", "label", "description", "source",
+)
+
+
+def _load_anatomy_index_rows() -> list[dict[str, str]]:
+    tsv = files("indicium_adapters_transcriptomics.data").joinpath(
+        "anatomy_index.tsv"
+    )
+    with tsv.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if tuple(reader.fieldnames or ()) != _ANATOMY_INDEX_COLUMNS:
+            raise RuntimeError(
+                "anatomy_index.tsv header does not match the declared schema. "
+                f"Expected {_ANATOMY_INDEX_COLUMNS!r}; got "
+                f"{tuple(reader.fieldnames or ())!r}."
+            )
+        return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
+
+
+class AnatomyIndex:
+    """Case-insensitive anatomical-term → UBERON CURIE lookup.
+
+    The bundled set is small on purpose (v0.2.0): hand-curated from a single
+    reference paper, every entry verified against the EBI OLS4 UBERON index
+    by ``data/build_anatomy_index.py`` at build time. Cnidarian-specific
+    concepts (physa, oral / aboral pole, mesoglea, gastrodermis, …) are not
+    represented in UBERON as of 2026 and so are deliberately absent.
+    """
+
+    def __init__(self, rows: list[dict[str, str]]):
+        self._rows = rows
+        self._by_term: dict[str, dict[str, str]] = {
+            row["term"].lower(): row for row in rows if row["term"]
+        }
+        self._by_label: dict[str, dict[str, str]] = {
+            row["label"].lower(): row for row in rows if row["label"]
+        }
+
+    def lookup(self, name: str) -> dict[str, str] | None:
+        """Return the matching row dict or ``None``.
+
+        Tries (in order): the lower-cased ``term`` column, then the UBERON
+        ``label`` column. Both are case-insensitive.
+        """
+        if not isinstance(name, str):
+            return None
+        token = name.strip().lower()
+        if not token:
+            return None
+        return self._by_term.get(token) or self._by_label.get(token)
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+
+ANATOMY_INDEX: Final[AnatomyIndex] = AnatomyIndex(_load_anatomy_index_rows())

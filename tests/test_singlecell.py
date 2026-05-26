@@ -1,9 +1,8 @@
 """SingleCellTranscriptomicsAdapter conformance + behaviour tests.
 
-v0.1.0 ships the adapter as a structural stub: discoverable, Protocol-compliant,
-emits SHACL, but ``enrich_claim()`` is a no-op pending the v0.2.0 reference
-single-cell paper. These tests pin that v0.1.0 behaviour so the v0.2.0 work has
-a clear contract to extend.
+v0.2.0 wires UBERON anatomy enrichment into ``enrich_claim()`` for the
+spatial-localisation qualifiers. Cell-type (CL) enrichment is on the
+v0.2.1 roadmap.
 """
 from __future__ import annotations
 
@@ -11,6 +10,7 @@ import rdflib
 from indicium_adapters import CURRENT_API_VERSION, DomainAdapter, SHACLProvider
 
 from indicium_adapters_transcriptomics import SingleCellTranscriptomicsAdapter
+from indicium_adapters_transcriptomics._enrichment import ANATOMY_INDEX
 
 # --- Protocol conformance ---------------------------------------------------
 
@@ -63,32 +63,84 @@ def test_extraction_context_names_the_domain_and_qualifiers():
         assert q in ctx
 
 
-# --- enrich_claim (no-op in v0.1.0) -----------------------------------------
+# --- enrich_claim — anatomy lookup (v0.2.0) ---------------------------------
 
 
-def test_enrich_claim_is_noop_in_v0_1_0():
-    """v0.1.0 stub: no enrichment yet, CL + UBERON lookups land in v0.2.0."""
-    a = SingleCellTranscriptomicsAdapter()
-    claim = {
-        "subject": "GZMB",
-        "qualifier": "marker_of_cell_type",
-        "object": "cytotoxic T cell",
-    }
-    out = a.enrich_claim(claim)
-    assert out == claim
-    assert out is not claim, "must return a defensive copy, not the input"
+def test_anatomy_index_has_a_meaningful_number_of_entries():
+    """The v0.2.0 starter set is small but every entry is verified against
+    UBERON. The floor is set at 3 so dropping below signals a regression
+    in the build pipeline."""
+    assert len(ANATOMY_INDEX) >= 3
 
 
 def test_enrich_claim_does_not_mutate_input():
     a = SingleCellTranscriptomicsAdapter()
     original = {
-        "subject": "CD8A",
-        "qualifier": "marker_of_cell_type",
-        "object": "T cell",
+        "subject": "MMP9",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
     }
     snapshot = dict(original)
     a.enrich_claim(original)
     assert original == snapshot
+
+
+def test_enrich_claim_returns_new_dict():
+    a = SingleCellTranscriptomicsAdapter()
+    claim = {"subject": "x", "qualifier": "localized_in_tissue", "object": "mesentery"}
+    out = a.enrich_claim(claim)
+    assert out is not claim
+
+
+def test_enrich_claim_resolves_uberon_anatomy_in_object_slot():
+    """`localized_in_tissue` typically uses a gene as subject and an
+    anatomical term as object — the object slot should pick up UBERON."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
+    })
+    assert out["ontology_terms"]["object"] == "UBERON:0002095"
+    xrefs = out["xrefs"]["object"]
+    assert xrefs["uberon"] == "UBERON:0002095"
+    assert xrefs["label"].lower() == "mesentery"
+
+
+def test_enrich_claim_is_case_insensitive_on_anatomy_terms():
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "x",
+        "qualifier": "localized_in_tissue",
+        "object": "PHARYNX",
+    })
+    assert out["ontology_terms"]["object"] == "UBERON:0006562"
+
+
+def test_enrich_claim_leaves_cnidarian_specific_terms_alone():
+    """Cnidarian-specific anatomy (physa, mesoglea, gastrodermis, etc.) has
+    no UBERON entry as of 2026 and is deliberately absent from the bundle.
+    The adapter must not invent a CURIE for such terms."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP14",
+        "qualifier": "localized_in_spatial_domain",
+        "object": "physa",
+    })
+    assert "ontology_terms" not in out
+
+
+def test_enrich_claim_resolves_both_subject_and_object_slots():
+    """An adapter that only enriches one of the two slots would be a
+    regression — both must be tried."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "mesentery",
+        "qualifier": "localized_in_tissue",
+        "object": "pharynx",
+    })
+    assert out["ontology_terms"]["subject"] == "UBERON:0002095"
+    assert out["ontology_terms"]["object"] == "UBERON:0006562"
 
 
 # --- SHACL ------------------------------------------------------------------

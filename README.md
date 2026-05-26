@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.1.2 ships two sibling adapters:
+v0.2.0 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -14,9 +14,11 @@ v0.1.2 ships two sibling adapters:
   or a UniProt accession; HGNC orthology is attached to Nematostella rows
   whenever the UniProt or `Preferred_name → HGNC symbol` join succeeds.
 - **`SingleCellTranscriptomicsAdapter`** — cell-resolution claims (cell-type
-  markers, cluster enrichment, spatial localisation). Structure-only in
-  v0.1.0 — `enrich_claim()` becomes a real CL (Cell Ontology) + UBERON lookup
-  in v0.2.0 once a reference single-cell paper anchors which terms to bundle.
+  markers, cluster enrichment, spatial localisation). Ships a small bundled
+  UBERON anatomy index for the spatial-localisation qualifiers
+  (`localized_in_tissue`, `localized_in_spatial_domain`), anchored on the
+  Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
+  enrichment via the Cell Ontology (CL) is on the v0.2.1 roadmap.
 
 Both register under the `indicium.adapters` entry-point group and are
 discoverable via `indicium_adapters.discover_adapters()`. Their qualifier sets
@@ -72,6 +74,19 @@ enriched = bulk.enrich_claim({
 #     "hgnc": "HGNC:3686", "ensembl": "ENSG00000107831",
 #     "ncbigene": "2253", "nemve1": "gw.51.96.1",
 #     "nvertx": "NvERTx.4.55830", "uniprot": "Q805B2",
+# }
+
+# 4) SingleCell anatomy → UBERON CURIE
+enriched = sc.enrich_claim({
+    "subject": "MMP9",
+    "qualifier": "localized_in_tissue",
+    "object": "mesentery",
+})
+# enriched["ontology_terms"]["object"] == "UBERON:0002095"
+# enriched["xrefs"]["object"] == {
+#     "uberon": "UBERON:0002095",
+#     "label": "mesentery",
+#     "description": "Anatomical organ component composed of a double layer ...",
 # }
 
 # Use both adapters at once via the composition helper
