@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: indicium-adapters-transcriptomics
+message: "If you use this software, please cite it as below."
+type: software
+version: 0.1.0
+date-released: "2026-05-26"
+authors:
+  - family-names: Boukhajou
+    given-names: Dina
+    email: dina.boukhajou@yahoo.com
+repository-code: "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics"
+license: MIT
+keywords:
+  - transcriptomics
+  - rna-seq
+  - single-cell
+  - knowledge-graph
+  - rdf
+  - shacl
+  - indicium
+  - domain-adapter
+abstract: >-
+  Transcriptomics-domain DomainAdapters for the indicium ecosystem.
+  v0.1.0 ships TranscriptomicsAdapter (bulk RNA-seq / microarray /
+  time-series claims, repository-accession enrichment). A sibling
+  SingleCellTranscriptomicsAdapter with CL + UBERON enrichment is
+  scheduled for v0.2.0.

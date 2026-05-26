@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "indicium-adapters-transcriptomics"
+version = "0.1.0"
+description = "Transcriptomics-domain DomainAdapters for the indicium ecosystem"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+authors = [{name = "Dina Boukhajou", email = "dina.boukhajou@yahoo.com"}]
+keywords = [
+    "transcriptomics", "rna-seq", "single-cell", "knowledge-graph",
+    "rdf", "shacl", "indicium", "domain-adapter", "ontology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "indicium-adapters>=0.4.0",
+    "indicium>=1.4",
+    "rdflib>=7.0",
+    "pyshacl>=0.25",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=4", "ruff>=0.5"]
+
+[project.entry-points."indicium.adapters"]
+bulk-transcriptomics = "indicium_adapters_transcriptomics.bulk:BulkTranscriptomicsAdapter"
+single-cell-transcriptomics = "indicium_adapters_transcriptomics.singlecell:SingleCellTranscriptomicsAdapter"
+
+[project.urls]
+Homepage = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics"
+Repository = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics"
+Issues = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics/issues"
+Changelog = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/indicium_adapters_transcriptomics"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.coverage.run]
+omit = [
+    "src/indicium_adapters_transcriptomics/data/build_gene_index.py",
+    "src/indicium_adapters_transcriptomics/data/build_vocabs.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --strict-markers --cov=indicium_adapters_transcriptomics --cov-report=term-missing --cov-fail-under=90"

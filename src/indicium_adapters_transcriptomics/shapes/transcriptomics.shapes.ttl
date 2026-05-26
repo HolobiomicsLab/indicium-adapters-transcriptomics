@@ -1,0 +1,19 @@
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix asb:   <http://holobiomicslab.org/asb/> .
+@prefix tx:    <http://holobiomicslab.org/adapters/transcriptomics/> .
+
+# v0.1.0 — minimal ASB claim CURIE-format validation only.
+#
+# Pipeline-level RDF validation for transcriptomics workflow classes
+# (SO / UBERON / CL / EFO node shapes) belongs upstream in the consuming
+# graph store, not in this adapter. See ROADMAP.md.
+
+tx:ClaimOntologyTermsCurieFormat a sh:NodeShape ;
+    sh:targetClass asb:Claim ;
+    sh:property [
+        sh:path tx:ontology_term ;
+        sh:datatype xsd:string ;
+        sh:pattern "^[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_.:/-]+$" ;
+        sh:message "ontology_term values must be CURIEs of the form PREFIX:LOCAL" ;
+    ] .
