@@ -30,6 +30,22 @@ __all__ = ["BulkTranscriptomicsAdapter", "accession_to_curie"]
 _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 
 
+# Bare-id columns of GeneIndex rows that need a prefix at CURIE-rendering time.
+# HGNC values are stored already in `HGNC:NNNN` CURIE form, so they short-circuit
+# the prefix step. The rest are bare ids (`ENSG…`, `54361`, …) and get prefixed
+# via this map. The prefix strings match the keys of TRANSCRIPTOMICS_PREFIXES.
+_PRINCIPAL_CURIE_PREFIX: Final[tuple[tuple[str, str | None], ...]] = (
+    ("hgnc", None),          # already a CURIE
+    ("ensembl", "ENSEMBL"),
+    ("ncbigene", "NCBIGene"),
+)
+
+# Xref columns surfaced under `xrefs[slot]`. Bare ids (no prefixing).
+_XREF_COLUMNS: Final[tuple[str, ...]] = (
+    "hgnc", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
+)
+
+
 class BulkTranscriptomicsAdapter:
     """Bulk transcriptomics DomainAdapter (api_version=1).
 
@@ -112,12 +128,20 @@ class BulkTranscriptomicsAdapter:
             if curie := accession_to_curie(name):
                 claim.setdefault("ontology_terms", {})[slot] = curie
                 continue
-            # Gene-name lookup (placeholder in v0.1.0; real index from v0.1.1).
+            # Gene-name / Nemve1 / UniProt lookup against the bundled index.
             if row := GENE_INDEX.lookup(name):
-                for col in ("hgnc", "ensembl", "ncbigene"):
-                    if curie := row.get(col):
+                # Principal CURIE: HGNC > Ensembl > NCBIGene. HGNC values are
+                # already in CURIE form; the rest get prefixed here so the
+                # consumer can expand them via TRANSCRIPTOMICS_PREFIXES.
+                for col, prefix in _PRINCIPAL_CURIE_PREFIX:
+                    if val := row.get(col):
+                        curie = val if prefix is None else f"{prefix}:{val}"
                         claim.setdefault("ontology_terms", {})[slot] = curie
                         break
+                # Xrefs: bare ids per column for downstream consumers.
+                xrefs = {col: row[col] for col in _XREF_COLUMNS if row.get(col)}
+                if xrefs:
+                    claim.setdefault("xrefs", {})[slot] = xrefs
 
         return claim
 

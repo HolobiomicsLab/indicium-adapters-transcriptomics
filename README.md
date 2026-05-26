@@ -2,13 +2,17 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.1.0 ships two sibling adapters:
+v0.1.2 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
-  expression claims plus study-level assay metadata. Repository-accession
-  enrichment (GEO / SRA / ENA / ArrayExpress / ENCODE / BioProject / dbGaP /
-  BioStudies); gene-symbol enrichment (HGNC + Nemve1) is on the v0.1.1
-  roadmap.
+  expression claims plus study-level assay metadata. Resolves repository
+  accessions (GEO / SRA / ENA / ArrayExpress / ENCODE / BioProject / dbGaP /
+  BioStudies) and gene names from a bundled comprehensive index (~53,000
+  entries) covering the full HGNC human gene catalogue cross-referenced
+  with the *Nematostella vectensis* G2V2 mapping (JGI Nemve1 + NvERTx + NVE
+  + Nv2g + UniProt). The lookup accepts a gene symbol, a Nemve1 / JGI id,
+  or a UniProt accession; HGNC orthology is attached to Nematostella rows
+  whenever the UniProt or `Preferred_name → HGNC symbol` join succeeds.
 - **`SingleCellTranscriptomicsAdapter`** — cell-resolution claims (cell-type
   markers, cluster enrichment, spatial localisation). Structure-only in
   v0.1.0 — `enrich_claim()` becomes a real CL (Cell Ontology) + UBERON lookup
@@ -36,6 +40,7 @@ found = discover_adapters()
 bulk = found["bulk-transcriptomics"]
 sc   = found["single-cell-transcriptomics"]
 
+# 1) Repository accession → CURIE
 enriched = bulk.enrich_claim({
     "subject": "GSE168938",
     "qualifier": "consolidates_dataset",
@@ -43,7 +48,33 @@ enriched = bulk.enrich_claim({
 })
 # enriched["ontology_terms"]["subject"] == "GEO:GSE168938"
 
-# Use both at once
+# 2) Gene symbol → HGNC CURIE + full xref map
+enriched = bulk.enrich_claim({
+    "subject": "WNT4",
+    "qualifier": "regulated_by",
+    "object": "cWnt pathway",
+})
+# enriched["ontology_terms"]["subject"] == "HGNC:12783"
+# enriched["xrefs"]["subject"] == {
+#     "hgnc": "HGNC:12783", "ensembl": "ENSG00000162552",
+#     "ncbigene": "54361", "uniprot": "P56705",
+# }
+
+# 3) Nematostella Nemve1 / JGI gene-model id → resolved to the human
+#    ortholog via the G2V2 cross-reference and the HGNC symbol fallback
+enriched = bulk.enrich_claim({
+    "subject": "gw.51.96.1",       # FGF8 in the Nemve1 v1 assembly
+    "qualifier": "expressed_in",
+    "object": "physa",
+})
+# enriched["ontology_terms"]["subject"] == "HGNC:3686"  (FGF8)
+# enriched["xrefs"]["subject"] == {
+#     "hgnc": "HGNC:3686", "ensembl": "ENSG00000107831",
+#     "ncbigene": "2253", "nemve1": "gw.51.96.1",
+#     "nvertx": "NvERTx.4.55830", "uniprot": "Q805B2",
+# }
+
+# Use both adapters at once via the composition helper
 composite = compose_adapters([bulk, sc])
 ```
 

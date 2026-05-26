@@ -1,22 +1,93 @@
 """Shared enrichment back-end for transcriptomics adapters.
 
-In v0.1.0 this module is a placeholder. The bundled gene-index lookup (HGNC +
-Nematostella Nemve1 in v0.1.0, expanded in v0.2.0) will be loaded here as a
-module-level ``GENE_INDEX`` and consumed by adapter ``enrich_claim()`` methods.
+In v0.1.1 this module loads the bundled gene-name index TSV at import time
+and exposes a ``GENE_INDEX`` singleton with a case-insensitive ``lookup()``
+method. The index is small (~20 entries) and hand-curated from the two
+benchmark reference papers (Warner et al. 2025, Cheung et al. 2024); a
+maintainer script for full HGNC + Nemve1 regeneration arrives in v0.1.2.
+
+The lookup accepts any of three input shapes and returns the matching row
+as a dict (or ``None``):
+
+- A bare gene symbol (case-insensitive): ``"WNT4"`` or ``"wnt4"``.
+- A Nemve1 / JGI gene-model id (case-sensitive): ``"gw.51.96.1"``.
+- A UniProt accession (case-sensitive): ``"P49338"``.
 """
 from __future__ import annotations
 
-# Bundled gene name → CURIE lookup is on the v0.1.1 roadmap. The placeholder
-# lookup below keeps the adapter wiring testable while the build pipeline for
-# the index TSV is being put in place.
+import csv
+from importlib.resources import files
+from typing import Final
+
+# Columns of `data/gene_index.tsv` — declared here so the loader can be
+# strict about the bundled schema. Adding columns means bumping this list
+# and the lookup logic in tandem.
+_GENE_INDEX_COLUMNS: Final[tuple[str, ...]] = (
+    "symbol",
+    "hgnc",
+    "ensembl",
+    "ncbigene",
+    "nemve1",
+    "nvertx",
+    "uniprot",
+    "description",
+)
 
 
-class _EmptyGeneIndex:
-    """No-op gene index returned by `enrich_claim()` until v0.1.1 ships the
-    bundled HGNC + Nemve1 TSV."""
+def _load_gene_index_rows() -> list[dict[str, str]]:
+    tsv = files("indicium_adapters_transcriptomics.data").joinpath("gene_index.tsv")
+    with tsv.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if tuple(reader.fieldnames or ()) != _GENE_INDEX_COLUMNS:
+            raise RuntimeError(
+                "gene_index.tsv header does not match the declared schema. "
+                f"Expected {_GENE_INDEX_COLUMNS!r}; got "
+                f"{tuple(reader.fieldnames or ())!r}."
+            )
+        return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
 
-    def lookup(self, name: str) -> dict | None:
+
+class GeneIndex:
+    """Case-insensitive gene-symbol lookup with a few aliasing strategies.
+
+    Pure data; loaded once at import time. The class only exposes a single
+    ``lookup()`` method so adapters can stay decoupled from the on-disk
+    format and the alias logic.
+    """
+
+    def __init__(self, rows: list[dict[str, str]]):
+        self._rows = rows
+        self._by_symbol: dict[str, dict[str, str]] = {
+            row["symbol"].lower(): row for row in rows if row["symbol"]
+        }
+        self._by_nemve1: dict[str, dict[str, str]] = {
+            row["nemve1"]: row for row in rows if row["nemve1"]
+        }
+        self._by_uniprot: dict[str, dict[str, str]] = {
+            row["uniprot"]: row for row in rows if row["uniprot"]
+        }
+
+    def lookup(self, name: str) -> dict[str, str] | None:
+        """Return the matching row as a dict, or ``None``.
+
+        Tries (in order): gene symbol (case-insensitive) → Nemve1 / JGI id
+        (case-sensitive) → UniProt accession (case-sensitive).
+        """
+        if not isinstance(name, str):
+            return None
+        token = name.strip()
+        if not token:
+            return None
+        if row := self._by_symbol.get(token.lower()):
+            return row
+        if row := self._by_nemve1.get(token):
+            return row
+        if row := self._by_uniprot.get(token):
+            return row
         return None
 
+    def __len__(self) -> int:
+        return len(self._rows)
 
-GENE_INDEX = _EmptyGeneIndex()
+
+GENE_INDEX: Final[GeneIndex] = GeneIndex(_load_gene_index_rows())

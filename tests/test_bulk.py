@@ -6,6 +6,7 @@ import rdflib
 from indicium_adapters import CURRENT_API_VERSION, DomainAdapter, SHACLProvider
 
 from indicium_adapters_transcriptomics import BulkTranscriptomicsAdapter, accession_to_curie
+from indicium_adapters_transcriptomics._enrichment import GENE_INDEX
 
 # --- Protocol conformance ---------------------------------------------------
 
@@ -139,6 +140,124 @@ def test_enrich_claim_leaves_unrecognized_terms_alone():
         "object": "tissue",
     })
     assert "ontology_terms" not in out
+
+
+# --- gene-symbol enrichment (v0.1.1) ----------------------------------------
+
+
+def test_gene_index_has_a_meaningful_number_of_entries():
+    """v0.1.2 bundled index covers the full HGNC complete set plus the G2V2
+    Nematostella cross-reference — ~50k rows. Floor is set well below the
+    actual count so the test signals a regression rather than tracks the
+    exact number."""
+    assert len(GENE_INDEX) >= 30_000
+
+
+def test_enrich_claim_resolves_gene_symbol_to_hgnc():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "regulated_by",
+        "object": "cWnt pathway",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+
+
+def test_enrich_claim_resolves_gene_symbol_case_insensitive():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "mmp9",
+        "qualifier": "expressed_in",
+        "object": "mesenteries",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:7176"
+
+
+def test_enrich_claim_resolves_nemve1_jgi_id():
+    """A Nemve1 / JGI gene-model id in `subject` should resolve to the same
+    HGNC CURIE as the gene symbol (via the same TSV row)."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "gw.51.96.1",
+        "qualifier": "expressed_in",
+        "object": "physa",
+    })
+    # gw.51.96.1 is FGF8 in the bundle
+    assert out["ontology_terms"]["subject"] == "HGNC:3686"
+
+
+def test_enrich_claim_resolves_uniprot_accession():
+    """A canonical human UniProt accession should resolve to its HGNC CURIE
+    via the bundled HGNC complete set."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "P56705",   # canonical human WNT4
+        "qualifier": "expressed_in",
+        "object": "oral pole",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+
+
+def test_enrich_claim_attaches_full_xrefs_for_a_known_gene():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "regulated_by",
+        "object": "cWnt pathway",
+    })
+    xrefs = out["xrefs"]["subject"]
+    # Spot-check three independent authorities: HGNC (the principal), the
+    # paired Ensembl human gene and the canonical UniProt accession that
+    # HGNC ships first under WNT4's `uniprot_ids`.
+    assert xrefs.get("hgnc") == "HGNC:12783"
+    assert xrefs.get("ensembl") == "ENSG00000162552"
+    assert xrefs.get("uniprot") == "P56705"
+
+
+def test_nemve1_id_resolves_to_human_ortholog_via_symbol_fallback():
+    """A G2V2 Nematostella row whose UniProt did not match an HGNC row should
+    still pick up the HGNC ortholog via the Preferred_name → HGNC symbol
+    fallback (added in v0.1.2). FGF8 is one such case: G2V2's first UniProt
+    accession is non-human, but Preferred_name='fgf8' matches HGNC's FGF8."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "gw.51.96.1",     # FGF8 JGI Nemve1 id
+        "qualifier": "expressed_in",
+        "object": "physa",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:3686"
+    xrefs = out["xrefs"]["subject"]
+    assert xrefs.get("nemve1") == "gw.51.96.1"
+    assert xrefs.get("hgnc") == "HGNC:3686"
+
+
+def test_pure_human_gene_resolves_even_without_nematostella_ortholog():
+    """The v0.1.2 build script also emits one row per HGNC gene that has no
+    Nematostella mapping in G2V2, so any plain human-gene mention still
+    resolves. MAPK1 is one such case — it's in HGNC, has no clear Nemve1
+    ortholog in G2V2."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MAPK1",
+        "qualifier": "regulated_by",
+        "object": "MEK1",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:6871"
+    xrefs = out["xrefs"]["subject"]
+    assert xrefs.get("hgnc") == "HGNC:6871"
+    # Pure-HGNC rows carry no Nematostella xrefs.
+    assert "nemve1" not in xrefs
+
+
+def test_enrich_claim_object_slot_also_resolved():
+    """Same lookup logic must apply to both subject and object slots."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "U0126 treatment",
+        "qualifier": "differentially_expressed_in",
+        "object": "WNT4",
+    })
+    assert out["ontology_terms"]["object"] == "HGNC:12783"
 
 
 @pytest.mark.parametrize(
