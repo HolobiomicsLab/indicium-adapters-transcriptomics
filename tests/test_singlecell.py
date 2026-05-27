@@ -120,14 +120,21 @@ def test_enrich_claim_is_case_insensitive_on_anatomy_terms():
 def test_enrich_claim_leaves_cnidarian_specific_terms_alone():
     """Cnidarian-specific anatomy (physa, mesoglea, gastrodermis, etc.) has
     no UBERON entry as of 2026 and is deliberately absent from the bundle.
-    The adapter must not invent a CURIE for such terms."""
+    The adapter must not invent a CURIE for such terms.
+
+    Pre-v0.4.0 this test could assert ``"ontology_terms" not in out`` because
+    single-cell had no gene resolver and so MMP14 (the subject, a gene)
+    also went unresolved. v0.4.0 wires the gene resolver in — MMP14 now
+    correctly resolves to HGNC:7160 — so the test narrows to the object
+    slot, which is what the cnidarian-anatomy guarantee actually covers.
+    """
     a = SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "MMP14",
         "qualifier": "localized_in_spatial_domain",
         "object": "physa",
     })
-    assert "ontology_terms" not in out
+    assert "object" not in out.get("ontology_terms", {})
 
 
 def test_enrich_claim_resolves_both_subject_and_object_slots():
@@ -141,6 +148,43 @@ def test_enrich_claim_resolves_both_subject_and_object_slots():
     })
     assert out["ontology_terms"]["subject"] == "UBERON:0002095"
     assert out["ontology_terms"]["object"] == "UBERON:0006562"
+
+
+# --- gene enrichment for single-cell (v0.4.0) -------------------------------
+
+
+def test_singlecell_resolves_gene_subject_for_marker_of_cell_type():
+    """v0.4.0: single-cell now wires the shared gene resolver. A claim
+    like ``marker_of_cell_type: WNT4 cnidocyte`` resolves ``WNT4`` to
+    its HGNC CURIE — pre-v0.4.0 it was unenriched because single-cell
+    only had anatomy + concept resolvers."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "marker_of_cell_type",
+        "object": "cnidocyte",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+    xrefs = out["xrefs"]["subject"]
+    assert xrefs.get("hgnc") == "HGNC:12783"
+    # cnidocyte is a Nematostella-specific cell type; no CL CURIE yet (v0.5.0).
+    assert "object" not in out.get("ontology_terms", {})
+
+
+def test_singlecell_gene_resolver_does_not_override_anatomy():
+    """Single-cell resolver priority is gene → anatomy → concept. For
+    a slot whose value is an anatomy term (not a gene), anatomy still
+    wins because gene-lookup returns ``None`` and the cascade falls
+    through. ``localized_in_tissue: <gene> mesentery`` keeps the
+    anatomy CURIE on the object slot."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:7176"
+    assert out["ontology_terms"]["object"] == "UBERON:0002095"
 
 
 # --- concept enrichment scaffolding (v0.3.0) --------------------------------
@@ -162,7 +206,10 @@ def test_concept_lookup_path_is_wired_into_singlecell_adapter(monkeypatch):
         "source": "monkeypatch fixture",
     }
     fake_index = _enrichment.ConceptIndex([fake_row])
-    monkeypatch.setattr(singlecell, "CONCEPT_INDEX", fake_index)
+    # v0.4.0: single-cell no longer imports CONCEPT_INDEX directly — it
+    # dispatches through the shared resolve_concept helper, which reads
+    # _enrichment.CONCEPT_INDEX. Patch target is the source of truth.
+    monkeypatch.setattr(_enrichment, "CONCEPT_INDEX", fake_index)
 
     a = singlecell.SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({

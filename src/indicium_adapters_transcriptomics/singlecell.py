@@ -6,21 +6,26 @@ generic expression assertions and study-level workflow qualifiers live in the
 bulk adapter; this one adds the qualifiers that only make sense once you have
 per-cell or per-spot resolution.
 
-v0.2.0 ships UBERON anatomy enrichment for the spatial-localisation
-qualifiers (``localized_in_tissue``, ``localized_in_spatial_domain``).
-Cell-type (CL ontology) enrichment for the cell-type qualifiers is on the
-v0.2.1 roadmap.
+v0.2.0 introduced UBERON anatomy enrichment for the spatial-localisation
+qualifiers; v0.4.0 wires in the shared gene resolver (so a single-cell
+claim like ``marker_of_cell_type: WNT4 cnidocyte`` now resolves WNT4 to
+HGNC:12783) and adopts the symmetric resolver-dispatcher pattern used
+by the bulk adapter. Cell-type (CL ontology) enrichment for the cell-type
+qualifiers themselves is still on the v0.5.0 roadmap — requires building
+a CL index from the corpus.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from importlib.resources import files
 from typing import Final
 
 import rdflib
 
 from indicium_adapters_transcriptomics._enrichment import (
-    ANATOMY_INDEX,
-    CONCEPT_INDEX,
+    resolve_anatomy,
+    resolve_concept,
+    resolve_gene,
 )
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 
@@ -31,6 +36,22 @@ __all__ = ["SingleCellTranscriptomicsAdapter"]
 # UBERON lookup. Object-side mostly — the spatial qualifiers describe a gene
 # (subject) localised in a tissue (object).
 _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
+
+
+# --- Resolver dispatch (v0.4.0) --------------------------------------------
+#
+# Single-cell has no study-level qualifiers (all five qualifiers are
+# claim-level / feature assertions), so a single default priority order
+# covers every claim. Gene wins on collision-prone names; anatomy and
+# concept fall through.
+
+_RESOLVERS: Final[dict[str, Callable[[str], tuple[str, dict[str, str]] | None]]] = {
+    "gene":    resolve_gene,
+    "anatomy": resolve_anatomy,
+    "concept": resolve_concept,
+}
+
+_DEFAULT_PRIORITY: Final[tuple[str, ...]] = ("gene", "anatomy", "concept")
 
 
 class SingleCellTranscriptomicsAdapter:
@@ -73,17 +94,20 @@ class SingleCellTranscriptomicsAdapter:
         )
 
     def enrich_claim(self, claim: dict) -> dict:
-        """Enrich a claim with UBERON CURIEs for anatomical terms.
+        """Enrich a single-cell claim with gene / anatomy / concept CURIEs.
 
-        v0.2.0 behaviour: recognise anatomy names in ``subject`` /
-        ``object`` and attach them to ``ontology_terms`` (UBERON CURIE) and
-        ``xrefs`` (label + description). The bundled set is small and
-        verified against UBERON; cnidarian-specific terms (physa, mesoglea,
-        gastrodermis, etc.) are absent because UBERON has no entry for
-        them as of 2026 — see ``data/build_anatomy_index.py`` for the
-        triaged-out list.
+        v0.4.0 contract: for each slot the resolver chain runs
+        ``gene`` → ``anatomy`` → ``concept`` and the first hit wins.
 
-        Cell-type lookup (CL ontology) is on the v0.2.1 roadmap.
+        Gene first means a slot like ``MMP9`` in
+        ``marker_of_cell_type: MMP9 cnidocyte`` resolves to ``HGNC:7176``
+        (was unenriched pre-v0.4.0 because single-cell had no gene
+        resolver wired). Anatomy still wins for tissue names because
+        gene-lookup of ``mesentery`` returns ``None``; concept fires
+        last as a fallback for protocol / methodology mentions.
+
+        Cell-type (CL ontology) resolution for the cell-type qualifiers
+        themselves is still on the v0.5.0 roadmap.
 
         Pure function — never mutates the input dict.
         """
@@ -97,32 +121,16 @@ class SingleCellTranscriptomicsAdapter:
             name = (claim.get(slot) or "").strip()
             if not name:
                 continue
-            if row := ANATOMY_INDEX.lookup(name):
-                claim.setdefault("ontology_terms", {})[slot] = row["uberon"]
-                # Xrefs: label + description so consumers can render the
-                # CURIE without an OLS4 round-trip.
-                xrefs_slot = {
-                    "uberon": row["uberon"],
-                    "label": row["label"],
-                }
-                if row.get("description"):
-                    xrefs_slot["description"] = row["description"]
-                claim.setdefault("xrefs", {})[slot] = xrefs_slot
-                continue
-
-            # Concept lookup (v0.3.0) — same shared index the bulk adapter
-            # uses. Useful when a single-cell claim refers to a study- or
-            # protocol-level concept (e.g. `acquired_in_mode` ↔ NCIT).
-            if row := CONCEPT_INDEX.lookup(name):
-                claim.setdefault("ontology_terms", {})[slot] = row["curie"]
-                xref_slot = {
-                    "curie": row["curie"],
-                    "label": row["label"],
-                    "ontology": row["ontology"],
-                }
-                if row.get("description"):
-                    xref_slot["description"] = row["description"]
-                claim.setdefault("xrefs", {})[slot] = xref_slot
+            for resolver_name in _DEFAULT_PRIORITY:
+                resolver = _RESOLVERS[resolver_name]
+                result = resolver(name)
+                if result is None:
+                    continue
+                curie, xrefs = result
+                claim.setdefault("ontology_terms", {})[slot] = curie
+                if xrefs:
+                    claim.setdefault("xrefs", {})[slot] = xrefs
+                break  # first hit per slot wins
 
         return claim
 

@@ -504,7 +504,10 @@ def test_concept_lookup_attaches_curie_and_xrefs(monkeypatch):
         "source": "monkeypatch fixture",
     }
     fake_index = _enrichment.ConceptIndex([fake_row])
-    monkeypatch.setattr(bulk, "CONCEPT_INDEX", fake_index)
+    # v0.4.0: bulk no longer imports CONCEPT_INDEX directly — it uses the
+    # shared resolve_concept helper from _enrichment, which reads the
+    # module-level singleton. So the patch target is _enrichment.
+    monkeypatch.setattr(_enrichment, "CONCEPT_INDEX", fake_index)
 
     a = bulk.BulkTranscriptomicsAdapter()
     out = a.enrich_claim({

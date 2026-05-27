@@ -98,9 +98,9 @@ new benchmark papers reveal the need.
   corpus (v0.3.1) → bio.tools (v0.3.1). Collision rule: first match
   wins, encoding a "grounding priority" ladder.
 
-### v0.4.0 — qualifier-aware resolution (done)
-- `BulkTranscriptomicsAdapter.enrich_claim()` now picks its resolver
-  chain based on the claim's qualifier:
+### v0.4.0 — qualifier-aware resolution + symmetric single-cell refactor (done)
+- `BulkTranscriptomicsAdapter.enrich_claim()` picks its resolver chain
+  based on the claim's qualifier:
   - Study-level qualifiers (`sequenced_on`, `aligned_with`,
     `quantified_with`, `normalized_with`, `tested_with`,
     `uses_database`) use `concept → accession → gene` — fixes the
@@ -108,19 +108,16 @@ new benchmark papers reveal the need.
     to `biotools:star` instead of HGNC:11359.
   - Feature qualifiers and `consolidates_dataset` keep the default
     `accession → gene → concept`.
-- The three resolvers (accession / gene / concept) are now first-class
-  functions dispatched through a `_RESOLVERS` map — easier to extend
-  when new resolution sources land.
-
-### v0.4.1 — SingleCell gene resolver (deferred)
-- `SingleCellTranscriptomicsAdapter` currently lacks a gene-name
-  resolver — single-cell claims about gene markers
-  (`marker_of_cell_type: <gene> <cell_type>`) don't get HGNC CURIEs.
-  Wiring `GENE_INDEX` into single-cell's `enrich_claim()` is mostly
-  a copy-paste of the bulk dispatcher, but it raises questions about
-  the right resolver chain for single-cell (gene first by default,
-  but what about the spatial-localisation qualifiers where the
-  object is anatomy?).
+- `SingleCellTranscriptomicsAdapter` adopts the same dispatcher
+  pattern and **gains a gene resolver**: claims like
+  `marker_of_cell_type: WNT4 cnidocyte` now resolve WNT4 to HGNC:12783
+  (unenriched pre-v0.4.0). Anatomy still wins for tissue names
+  through the fallback cascade.
+- Resolver helpers (`resolve_gene`, `resolve_anatomy`, `resolve_concept`)
+  extracted to `_enrichment.py` so bulk and single-cell share the same
+  row → CURIE rendering logic.
+- `scripts/check.ps1` ships a local CI parity command (ruff +
+  pytest+cov) to catch lint regressions before push.
 
 ### v0.4.0+ — broader coverage
 - Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO

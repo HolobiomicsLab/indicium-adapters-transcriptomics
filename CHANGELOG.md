@@ -42,19 +42,51 @@
     is a gene name (sloppy LLM output) still gets a CURIE rather than
     a dropped slot.
 
+### Changed — SingleCellTranscriptomicsAdapter (symmetric refactor)
+
+- ``SingleCellTranscriptomicsAdapter`` now uses the same
+  resolver-dispatcher pattern and **gains a gene resolver**. Previously
+  single-cell had only anatomy + concept lookup wired, so a slot like
+  ``marker_of_cell_type: WNT4 cnidocyte`` left ``WNT4`` unenriched
+  even though it's a perfectly valid HGNC symbol. Now it resolves to
+  ``HGNC:12783``.
+- Single-cell uses one default priority order (``gene → anatomy →
+  concept``) for all its qualifiers — they're all claim-level
+  (cell-resolution feature assertions), so no study-level override is
+  needed. Anatomy still wins for tissue terms (gene-lookup of
+  ``mesentery`` returns ``None``, the cascade falls through to
+  anatomy).
+- 2 new tests pin the contract: gene resolution for the cell-type
+  qualifiers, and the gene-doesn't-override-anatomy fallback.
+
+### Added — shared resolver helpers
+
+- The three resolvers (gene / anatomy / concept) moved into
+  ``_enrichment.py`` as module-level callables (``resolve_gene``,
+  ``resolve_anatomy``, ``resolve_concept``), keeping the row → CURIE
+  rendering logic next to the corresponding Index classes. Bulk and
+  single-cell both import and dispatch through them — one source of
+  truth for the rendering rules.
+
+### Added — local CI parity helper
+
+- ``scripts/check.ps1`` runs the same checks the GitHub Actions CI
+  runs (ruff + pytest with coverage). Use it before every push;
+  pytest alone misses lint failures. Direct response to the v0.3.1
+  CI red caused by a ruff E741 that didn't show up locally.
+
 ### Notes
 
-- ``SingleCellTranscriptomicsAdapter`` was **deliberately left
-  unchanged**. Its qualifiers are all claim-level (cell-resolution
-  feature assertions), it doesn't expose a gene resolver, and there's
-  no collision to disambiguate. A symmetrical refactor would have
-  been pure structural churn — to be done when single-cell gains a
-  gene resolver (probably v0.4.1+) or its own study-level qualifiers.
 - The 13 corpus terms unresolved at v0.3.1 (Cell Ranger, scVI, FLAIR,
   TALON, IsoQuant, SQANTI, StringTie2, Bambu, FLAMES, LRGASP, 10x
   Genomics, Iso-Seq, ONT direct RNA) are unaffected by v0.4.0 — they
   were absent from both OLS4 and bio.tools, not blocked by priority
   ordering.
+- A monkeypatch test that previously patched ``bulk.CONCEPT_INDEX`` /
+  ``singlecell.CONCEPT_INDEX`` directly was updated to patch
+  ``_enrichment.CONCEPT_INDEX`` instead — since v0.4.0, both adapters
+  read the index through the shared ``resolve_concept`` helper and
+  the singleton's home is ``_enrichment``.
 
 ## v0.3.1 — corpus-driven concept harvest: OLS4 (cascade modes) + bio.tools (2026-05-27)
 

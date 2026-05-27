@@ -19,7 +19,7 @@ from typing import Final
 
 import rdflib
 
-from indicium_adapters_transcriptomics._enrichment import CONCEPT_INDEX, GENE_INDEX
+from indicium_adapters_transcriptomics._enrichment import resolve_concept, resolve_gene
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 from indicium_adapters_transcriptomics._registries import accession_to_curie
 
@@ -31,28 +31,12 @@ __all__ = ["BulkTranscriptomicsAdapter", "accession_to_curie"]
 _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 
 
-# Bare-id columns of GeneIndex rows that need a prefix at CURIE-rendering time.
-# HGNC values are stored already in `HGNC:NNNN` CURIE form, so they short-circuit
-# the prefix step. The rest are bare ids (`ENSG…`, `54361`, …) and get prefixed
-# via this map. The prefix strings match the keys of TRANSCRIPTOMICS_PREFIXES.
-_PRINCIPAL_CURIE_PREFIX: Final[tuple[tuple[str, str | None], ...]] = (
-    ("hgnc", None),          # already a CURIE
-    ("ensembl", "ENSEMBL"),
-    ("ncbigene", "NCBIGene"),
-)
-
-# Xref columns surfaced under `xrefs[slot]`. Bare ids (no prefixing).
-_XREF_COLUMNS: Final[tuple[str, ...]] = (
-    "hgnc", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
-)
-
-
 # --- Resolver dispatch (v0.4.0) --------------------------------------------
 #
-# Each resolver inspects a slot value (a gene name / accession / tool name)
-# and returns ``(curie, xrefs_dict) | None``. xrefs are written under
-# ``claim["xrefs"][slot]`` when non-empty; the resolver may return an empty
-# dict when it has no xrefs to surface (accessions, for example).
+# Each resolver inspects a slot value and returns ``(curie, xrefs) | None``.
+# Gene + concept resolvers are shared with the single-cell adapter and live
+# in ``_enrichment``; the accession resolver is bulk-only (single-cell
+# claims don't carry repository accessions in the same way).
 
 
 def _resolve_accession(name: str) -> tuple[str, dict[str, str]] | None:
@@ -62,42 +46,10 @@ def _resolve_accession(name: str) -> tuple[str, dict[str, str]] | None:
     return curie, {}
 
 
-def _resolve_gene(name: str) -> tuple[str, dict[str, str]] | None:
-    row = GENE_INDEX.lookup(name)
-    if row is None:
-        return None
-    # Principal CURIE: HGNC > Ensembl > NCBIGene. HGNC values are stored
-    # already in CURIE form; the rest get prefixed here.
-    curie: str | None = None
-    for col, prefix in _PRINCIPAL_CURIE_PREFIX:
-        val = row.get(col)
-        if val:
-            curie = val if prefix is None else f"{prefix}:{val}"
-            break
-    if curie is None:
-        return None
-    xrefs = {col: row[col] for col in _XREF_COLUMNS if row.get(col)}
-    return curie, xrefs
-
-
-def _resolve_concept(name: str) -> tuple[str, dict[str, str]] | None:
-    row = CONCEPT_INDEX.lookup(name)
-    if row is None:
-        return None
-    xref = {
-        "curie": row["curie"],
-        "label": row["label"],
-        "ontology": row["ontology"],
-    }
-    if row.get("description"):
-        xref["description"] = row["description"]
-    return row["curie"], xref
-
-
 _RESOLVERS: Final[dict[str, Callable[[str], tuple[str, dict[str, str]] | None]]] = {
     "accession": _resolve_accession,
-    "gene":      _resolve_gene,
-    "concept":   _resolve_concept,
+    "gene":      resolve_gene,
+    "concept":   resolve_concept,
 }
 
 

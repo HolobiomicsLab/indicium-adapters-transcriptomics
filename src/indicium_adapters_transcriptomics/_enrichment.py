@@ -243,3 +243,73 @@ class ConceptIndex:
 
 
 CONCEPT_INDEX: Final[ConceptIndex] = ConceptIndex(_load_concept_index_rows())
+
+
+# --- Resolver helpers (v0.4.0) ----------------------------------------------
+#
+# Each resolver takes a free-text slot value (a gene name, an anatomy term,
+# a concept literal) and returns ``(principal_curie, xrefs_dict) | None``.
+# The adapter ``enrich_claim`` methods dispatch through these — one shared
+# implementation per index, so bulk and single-cell stay in sync on the
+# row → claim-shape rendering logic.
+
+# Order in which gene-row columns are tried for the principal CURIE.
+# HGNC values are stored already in CURIE form; the others are bare ids
+# (`ENSG…`, `54361`, …) and get prefixed here.
+_GENE_PRINCIPAL_CURIE_PREFIX: Final[tuple[tuple[str, str | None], ...]] = (
+    ("hgnc", None),
+    ("ensembl", "ENSEMBL"),
+    ("ncbigene", "NCBIGene"),
+)
+
+# Xref columns surfaced under ``xrefs[slot]``. Bare ids (no prefixing).
+_GENE_XREF_COLUMNS: Final[tuple[str, ...]] = (
+    "hgnc", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
+)
+
+
+def resolve_gene(name: str) -> tuple[str, dict[str, str]] | None:
+    """Resolve ``name`` to a gene CURIE + xrefs via ``GENE_INDEX``.
+
+    Principal CURIE follows HGNC > Ensembl > NCBIGene priority; xrefs
+    surface the bare HGNC / Ensembl / NCBIGene / Nemve1 / NvERTx /
+    UniProt ids so downstream consumers can render any of them."""
+    row = GENE_INDEX.lookup(name)
+    if row is None:
+        return None
+    curie: str | None = None
+    for col, prefix in _GENE_PRINCIPAL_CURIE_PREFIX:
+        val = row.get(col)
+        if val:
+            curie = val if prefix is None else f"{prefix}:{val}"
+            break
+    if curie is None:
+        return None
+    xrefs = {col: row[col] for col in _GENE_XREF_COLUMNS if row.get(col)}
+    return curie, xrefs
+
+
+def resolve_anatomy(name: str) -> tuple[str, dict[str, str]] | None:
+    """Resolve ``name`` to a UBERON anatomy CURIE + xrefs via ``ANATOMY_INDEX``."""
+    row = ANATOMY_INDEX.lookup(name)
+    if row is None:
+        return None
+    xref = {"uberon": row["uberon"], "label": row["label"]}
+    if row.get("description"):
+        xref["description"] = row["description"]
+    return row["uberon"], xref
+
+
+def resolve_concept(name: str) -> tuple[str, dict[str, str]] | None:
+    """Resolve ``name`` to a concept CURIE + xrefs via ``CONCEPT_INDEX``."""
+    row = CONCEPT_INDEX.lookup(name)
+    if row is None:
+        return None
+    xref = {
+        "curie": row["curie"],
+        "label": row["label"],
+        "ontology": row["ontology"],
+    }
+    if row.get("description"):
+        xref["description"] = row["description"]
+    return row["curie"], xref
