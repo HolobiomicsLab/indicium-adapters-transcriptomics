@@ -184,27 +184,27 @@ _WORD_BOUNDARY_AFTER_TERM = re.compile(r"[\s\-]")
 
 def _prefix_match(corpus_term: str, label: str) -> bool:
     """``corpus_term`` is a whole-word prefix of ``label`` (case-insensitive)."""
-    c = corpus_term.strip().lower()
-    l = label.strip().lower()
-    if not c or not l:
+    term_lc = corpus_term.strip().lower()
+    label_lc = label.strip().lower()
+    if not term_lc or not label_lc:
         return False
-    if l == c:
+    if label_lc == term_lc:
         return True
-    if not l.startswith(c):
+    if not label_lc.startswith(term_lc):
         return False
-    boundary = l[len(c):][:1]
+    boundary = label_lc[len(term_lc):][:1]
     return bool(_WORD_BOUNDARY_AFTER_TERM.match(boundary))
 
 
 def _substring_match(corpus_term: str, label: str) -> bool:
     """``corpus_term`` appears in ``label`` bounded by whitespace, hyphens or
     string ends (case-insensitive whole-word substring match)."""
-    c = corpus_term.strip().lower()
-    l = label.strip().lower()
-    if not c or not l:
+    term_lc = corpus_term.strip().lower()
+    label_lc = label.strip().lower()
+    if not term_lc or not label_lc:
         return False
-    pat = r"(?:^|[\s\-])" + re.escape(c) + r"(?:[\s\-]|$)"
-    return re.search(pat, l) is not None
+    pat = r"(?:^|[\s\-])" + re.escape(term_lc) + r"(?:[\s\-]|$)"
+    return re.search(pat, label_lc) is not None
 
 
 def verify_iri(
