@@ -1,0 +1,16 @@
+{
+  "file": "nihms-1856632.pdf",
+  "hits": {
+    "platform": {
+      "Illumina": 1,
+      "NovaSeq": 1
+    },
+    "aligner_quant": {
+      "STAR": 1
+    },
+    "sc_tool": {
+      "Cell Ranger": 1,
+      "scVI": 1
+    }
+  }
+}

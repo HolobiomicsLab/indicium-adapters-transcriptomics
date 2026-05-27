@@ -143,6 +143,37 @@ def test_enrich_claim_resolves_both_subject_and_object_slots():
     assert out["ontology_terms"]["object"] == "UBERON:0006562"
 
 
+# --- concept enrichment scaffolding (v0.3.0) --------------------------------
+
+
+def test_concept_lookup_path_is_wired_into_singlecell_adapter(monkeypatch):
+    """Wiring test for the concept-lookup branch in the SingleCell
+    `enrich_claim`. Monkey-patches a single-row index in isolation from
+    the bundled TSV: a term that does not match anatomy must still
+    resolve via the concept index when an entry exists."""
+    from indicium_adapters_transcriptomics import _enrichment, singlecell
+
+    fake_row = {
+        "term": "rna-seq",
+        "curie": "OBI:0001177",
+        "label": "RNA-seq assay",
+        "description": "An assay that sequences expressed RNA.",
+        "ontology": "OBI",
+        "source": "monkeypatch fixture",
+    }
+    fake_index = _enrichment.ConceptIndex([fake_row])
+    monkeypatch.setattr(singlecell, "CONCEPT_INDEX", fake_index)
+
+    a = singlecell.SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "localized_in_spatial_domain",
+        "object": "rna-seq",
+    })
+    assert out["ontology_terms"]["object"] == "OBI:0001177"
+    assert out["xrefs"]["object"]["ontology"] == "OBI"
+
+
 # --- SHACL ------------------------------------------------------------------
 
 

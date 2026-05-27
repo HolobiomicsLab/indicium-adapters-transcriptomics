@@ -1,0 +1,32 @@
+{
+  "file": "s41592-024-02298-3.pdf",
+  "hits": {
+    "platform": {
+      "Illumina": 28,
+      "HiSeq": 1,
+      "PacBio": 174,
+      "Sequel": 2,
+      "Oxford Nanopore": 290
+    },
+    "protocol": {
+      "Iso-Seq": 3,
+      "ONT direct RNA": 1
+    },
+    "aligner_quant": {
+      "STAR": 1,
+      "minimap2": 11,
+      "RSEM": 19,
+      "StringTie": 1
+    },
+    "long_read_tool": {
+      "FLAIR": 27,
+      "TALON": 23,
+      "IsoQuant": 54,
+      "SQANTI": 16,
+      "StringTie2": 26,
+      "Bambu": 61,
+      "FLAMES": 22,
+      "LRGASP": 81
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.2.0 ships two sibling adapters:
+v0.3.0 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -19,6 +19,14 @@ v0.2.0 ships two sibling adapters:
   (`localized_in_tissue`, `localized_in_spatial_domain`), anchored on the
   Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
   enrichment via the Cell Ontology (CL) is on the v0.2.1 roadmap.
+
+Both adapters also share a **concept index** (v0.3.0) — 31 OLS4-verified
+CURIEs across INO (regulation), NCIT (analysis concepts), GO (roots), OBI
+(investigation / assay / protocol) and STATO (statistical variables) —
+covering terms like *fold change*, *log2*, *up-regulation*, *RNA
+sequencing assay*, *multiple comparison adjustment*. The lookup runs
+after the domain-specific resolvers (gene / accession / anatomy), so
+domain hits always win.
 
 Both register under the `indicium.adapters` entry-point group and are
 discoverable via `indicium_adapters.discover_adapters()`. Their qualifier sets
@@ -87,6 +95,20 @@ enriched = sc.enrich_claim({
 #     "uberon": "UBERON:0002095",
 #     "label": "mesentery",
 #     "description": "Anatomical organ component composed of a double layer ...",
+# }
+
+# 5) Analysis-concept term → NCIT / INO / OBI / GO / STATO CURIE
+enriched = bulk.enrich_claim({
+    "subject": "fold change",
+    "qualifier": "tested_with",
+    "object": "DESeq2",
+})
+# enriched["ontology_terms"]["subject"] == "NCIT:C60693"
+# enriched["xrefs"]["subject"] == {
+#     "curie": "NCIT:C60693",
+#     "label": "Fold Change",
+#     "ontology": "NCIT",
+#     "description": "An indication of the magnitude difference ...",
 # }
 
 # Use both adapters at once via the composition helper

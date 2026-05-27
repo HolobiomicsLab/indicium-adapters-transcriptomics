@@ -20,6 +20,15 @@ MONDO: Final[str] = "http://purl.obolibrary.org/obo/MONDO_"
 PATO: Final[str] = "http://purl.obolibrary.org/obo/PATO_"
 EDAM: Final[str] = "http://edamontology.org/"
 
+# Concept / process / artifact ontologies — added in v0.3.0 to align with
+# the TranscriptoKG modelling vocabulary (which uses NCIT for analysis
+# concepts, INO for regulation processes, SIO/IAO/RO for predicates).
+INO: Final[str] = "http://purl.obolibrary.org/obo/INO_"
+NCIT: Final[str] = "http://purl.obolibrary.org/obo/NCIT_"
+SIO: Final[str] = "http://semanticscience.org/resource/SIO_"
+RO: Final[str] = "http://purl.obolibrary.org/obo/RO_"
+IAO: Final[str] = "http://purl.obolibrary.org/obo/IAO_"
+
 # Gene / transcript identifier authorities
 HGNC: Final[str] = "https://identifiers.org/hgnc:"
 MGI: Final[str] = "https://identifiers.org/MGI:"
@@ -51,6 +60,12 @@ TRANSCRIPTOMICS_PREFIXES: Final[dict[str, str]] = {
     "MONDO": MONDO,
     "PATO": PATO,
     "EDAM": EDAM,
+    # Concept / process / artifact axes (v0.3.0)
+    "INO": INO,
+    "NCIT": NCIT,
+    "SIO": SIO,
+    "RO": RO,
+    "IAO": IAO,
     # Gene / transcript identifiers
     "HGNC": HGNC,
     "MGI": MGI,

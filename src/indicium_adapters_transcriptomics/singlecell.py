@@ -18,7 +18,10 @@ from typing import Final
 
 import rdflib
 
-from indicium_adapters_transcriptomics._enrichment import ANATOMY_INDEX
+from indicium_adapters_transcriptomics._enrichment import (
+    ANATOMY_INDEX,
+    CONCEPT_INDEX,
+)
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 
 __all__ = ["SingleCellTranscriptomicsAdapter"]
@@ -105,6 +108,21 @@ class SingleCellTranscriptomicsAdapter:
                 if row.get("description"):
                     xrefs_slot["description"] = row["description"]
                 claim.setdefault("xrefs", {})[slot] = xrefs_slot
+                continue
+
+            # Concept lookup (v0.3.0) — same shared index the bulk adapter
+            # uses. Useful when a single-cell claim refers to a study- or
+            # protocol-level concept (e.g. `acquired_in_mode` ↔ NCIT).
+            if row := CONCEPT_INDEX.lookup(name):
+                claim.setdefault("ontology_terms", {})[slot] = row["curie"]
+                xref_slot = {
+                    "curie": row["curie"],
+                    "label": row["label"],
+                    "ontology": row["ontology"],
+                }
+                if row.get("description"):
+                    xref_slot["description"] = row["description"]
+                claim.setdefault("xrefs", {})[slot] = xref_slot
 
         return claim
 

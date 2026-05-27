@@ -1,0 +1,23 @@
+{
+  "file": "nihms-1007517.pdf",
+  "hits": {
+    "platform": {
+      "Illumina": 11,
+      "NovaSeq": 4
+    },
+    "protocol": {
+      "10x Genomics": 3,
+      "Smart-seq2": 1
+    },
+    "aligner_quant": {
+      "STAR": 1
+    },
+    "sc_tool": {
+      "Cell Ranger": 1,
+      "Seurat": 3
+    },
+    "stat_test": {
+      "Wilcoxon": 2
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "file": "nihms-1751017.pdf",
+  "hits": {
+    "platform": {
+      "Illumina": 14,
+      "NovaSeq": 3
+    },
+    "protocol": {
+      "Drop-seq": 12,
+      "Slide-seq": 109,
+      "Visium": 4
+    },
+    "aligner_quant": {
+      "STAR": 4
+    },
+    "sc_tool": {
+      "Seurat": 3
+    },
+    "qc": {
+      "Picard": 6
+    },
+    "stat_test": {
+      "Wilcoxon": 1,
+      "t-test": 3
+    }
+  }
+}

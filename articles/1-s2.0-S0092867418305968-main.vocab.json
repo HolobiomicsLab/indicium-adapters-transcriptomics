@@ -1,0 +1,25 @@
+{
+  "file": "1-s2.0-S0092867418305968-main.pdf",
+  "hits": {
+    "platform": {
+      "Illumina": 5,
+      "NextSeq": 2
+    },
+    "protocol": {
+      "MARS-seq": 8,
+      "bulk RNA-seq": 1
+    },
+    "aligner_quant": {
+      "STAR": 7,
+      "Bowtie2": 4,
+      "Bowtie": 1
+    },
+    "de_tool": {
+      "DESeq2": 4
+    },
+    "stat_test": {
+      "Wilcoxon": 5,
+      "Benjamini-Hochberg": 1
+    }
+  }
+}

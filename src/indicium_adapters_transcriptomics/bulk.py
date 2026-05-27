@@ -18,7 +18,7 @@ from typing import Final
 
 import rdflib
 
-from indicium_adapters_transcriptomics._enrichment import GENE_INDEX
+from indicium_adapters_transcriptomics._enrichment import CONCEPT_INDEX, GENE_INDEX
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 from indicium_adapters_transcriptomics._registries import accession_to_curie
 
@@ -142,6 +142,22 @@ class BulkTranscriptomicsAdapter:
                 xrefs = {col: row[col] for col in _XREF_COLUMNS if row.get(col)}
                 if xrefs:
                     claim.setdefault("xrefs", {})[slot] = xrefs
+                continue
+
+            # Concept lookup (v0.3.0) — covers analysis concepts (NCIT),
+            # regulation processes (INO), assay / protocol classes (OBI),
+            # statistical concepts (STATO), GO roots, etc. Drawn from the
+            # TranscriptoKG modelling vocab.
+            if row := CONCEPT_INDEX.lookup(name):
+                claim.setdefault("ontology_terms", {})[slot] = row["curie"]
+                xref_slot = {
+                    "curie": row["curie"],
+                    "label": row["label"],
+                    "ontology": row["ontology"],
+                }
+                if row.get("description"):
+                    xref_slot["description"] = row["description"]
+                claim.setdefault("xrefs", {})[slot] = xref_slot
 
         return claim
 

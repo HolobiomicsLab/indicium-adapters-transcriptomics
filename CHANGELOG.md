@@ -1,5 +1,63 @@
 # Changelog
 
+## v0.3.0 — TranscriptoKG concept-index enrichment (NCIT / INO / OBI / STATO / GO) (2026-05-27)
+
+### Added
+
+- New ontology axes wired into `TRANSCRIPTOMICS_PREFIXES`: **INO**
+  (regulation processes), **NCIT** (analysis concepts), **SIO**, **RO** and
+  **IAO** — drawn from the TranscriptoKG vocabulary work so adapters and
+  the upstream KG stay aligned on the same CURIE namespace set.
+- `data/build_concept_index.py` maintainer script that verifies a curated
+  list of 31 CURIEs against EBI OLS4 and writes a TSV with the canonical
+  label and definition. The candidate set is drawn from the TranscriptoKG
+  mapping & vocab (Boukhajou, 2026): 2 INO regulation terms, 20 NCIT
+  analysis concepts (Fold Change, log2, Timepoint, Multiple Comparison
+  Adjustment, RNA Sequencing Data File, ...), 3 GO roots, 5 OBI
+  investigation / role / protocol / DE-transformation / RNA-sequencing
+  terms, and 1 STATO statistical-variable anchor. The build retries on
+  OLS4 5xx and throttles 0.3s between requests.
+- Bundled `data/concept_index.tsv` — **31 verified entries**, every one
+  re-checked against OLS4 at build time (no hand-curation in the shipped
+  row). Two OBI entries (`OBI:0000249`, `OBI:0000650`) had been tagged
+  incorrectly in the upstream TranscriptoKG vocab — OLS4 verification
+  caught the drift and the source notes were corrected to reflect the
+  canonical labels ("technical replicate role" and "differential
+  expression analysis data transformation"); the terms themselves stay
+  relevant to the transcriptomics domain so the rows are kept.
+- `_enrichment.ConceptIndex` real lookup class loading the bundled TSV
+  at import time. Accepts a term (case-insensitive) and returns the full
+  row dict (CURIE / label / description / ontology) or `None`. Strict
+  header check at load time: a malformed TSV raises before silent
+  mis-mapping can occur.
+- Concept-lookup branch wired into both adapters' `enrich_claim()` — runs
+  after gene / accession / anatomy lookup, so domain-specific resolution
+  always takes precedence. Adds the principal CURIE under
+  `ontology_terms[slot]` and `{curie, label, ontology, description}`
+  under `xrefs[slot]`.
+- 7 regression tests covering: index loadability, `None` for unknown /
+  empty / non-str input, safe-no-op for unknown terms, end-to-end CURIE +
+  xref attachment, single-cell-side wiring via monkeypatched index.
+
+### Changed
+
+- Test docstrings that referenced "while the TSV is empty (pending OLS4
+  verification)" updated to reflect the populated v0.3.0 state.
+- `BulkTranscriptomicsAdapter` and `SingleCellTranscriptomicsAdapter` now
+  expose 17 / 12 effective lookup axes respectively (gene + accession +
+  anatomy + concept).
+
+### Notes
+
+- A second concept-harvesting pass (corpus-driven: tools / platforms /
+  protocols extracted from the 6-paper mini-corpus — STAR, Seurat,
+  MARS-seq, Illumina, 10x, etc.) is scheduled for v0.3.1 / v0.4.0 once a
+  `build_corpus_concept_candidates.py` script using OLS4
+  search-by-label is written. Hand-curation of CURIEs is explicitly
+  avoided.
+- The earlier ROADMAP note about contributing cnidarian-specific anatomy
+  upstream to UBERON is unchanged — still on the v0.4.0 wish-list.
+
 ## v0.2.0 — UBERON anatomy enrichment for SingleCellTranscriptomicsAdapter (2026-05-26)
 
 ### Added

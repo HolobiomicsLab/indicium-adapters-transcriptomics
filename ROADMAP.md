@@ -62,13 +62,35 @@ new benchmark papers reveal the need.
 - Same build pattern as v0.2.0: maintainer script hits OLS4 CL endpoint,
   exact-label match only.
 
-### v0.3.0+ — broader coverage
-- Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO so
-  future versions don't need to triage them out.
+### v0.3.0 — TranscriptoKG concept-index enrichment (done)
+- `data/build_concept_index.py` verifies 31 CURIEs against EBI OLS4:
+  INO regulation processes, NCIT analysis concepts, GO roots, OBI
+  investigation / role / protocol / DE-transformation / RNA-sequencing,
+  STATO statistical variable.
+- New prefixes wired into `TRANSCRIPTOMICS_PREFIXES`: INO, NCIT, SIO,
+  RO, IAO.
+- `_enrichment.ConceptIndex` shared by both adapters; concept lookup
+  runs after gene / accession / anatomy resolution so domain-specific
+  hits always win.
+
+### v0.3.1 — corpus-driven concept harvesting
+- `data/build_corpus_concept_candidates.py`: ingests `articles/`
+  per-paper vocab JSONs (produced by `_extract_vocab.py` over the
+  6-paper mini-corpus) and uses the OLS4 `search-by-label` endpoint
+  to *propose* candidate CURIEs for the ~25 extracted methodological
+  terms (STAR, Seurat, MARS-seq, Illumina, 10x, ...). Every proposed
+  CURIE is then re-verified by IRI lookup before landing in
+  `concept_index.tsv`.
+- Strict no-hand-curation rule: candidates are accepted only when the
+  OLS4 label is an exact match (case-insensitive) for the corpus term.
+
+### v0.4.0+ — broader coverage
+- Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO
+  so future versions don't need to triage them out.
 - Allow alternative ontology prefixes in the anatomy index (e.g. GO for
   extracellular matrix, NCBITaxon for organism-context claims).
 
-### v0.3.0+ — broader gene-name coverage and parsers
+### v0.4.0+ — broader gene-name coverage and parsers
 - Extend the gene-name index to mouse (MGI), zebrafish (ZFIN), Drosophila
   (FlyBase), C. elegans (WormBase), Arabidopsis (TAIR), yeast (SGD).
 - GEO SOFT / ENA XML / BioStudies / ISA-Tab parser helpers projecting series

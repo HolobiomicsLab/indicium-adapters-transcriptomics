@@ -152,3 +152,68 @@ class AnatomyIndex:
 
 
 ANATOMY_INDEX: Final[AnatomyIndex] = AnatomyIndex(_load_anatomy_index_rows())
+
+
+# --- Concept index (v0.3.0) -------------------------------------------------
+
+_CONCEPT_INDEX_COLUMNS: Final[tuple[str, ...]] = (
+    "term", "curie", "label", "description", "ontology", "source",
+)
+
+
+def _load_concept_index_rows() -> list[dict[str, str]]:
+    tsv = files("indicium_adapters_transcriptomics.data").joinpath(
+        "concept_index.tsv"
+    )
+    with tsv.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if tuple(reader.fieldnames or ()) != _CONCEPT_INDEX_COLUMNS:
+            raise RuntimeError(
+                "concept_index.tsv header does not match the declared schema. "
+                f"Expected {_CONCEPT_INDEX_COLUMNS!r}; got "
+                f"{tuple(reader.fieldnames or ())!r}."
+            )
+        return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
+
+
+class ConceptIndex:
+    """Case-insensitive concept-term → ontology CURIE lookup.
+
+    Covers analysis concepts (NCIT), regulation processes (INO), assay /
+    protocol / data set classes (OBI), statistical concepts (STATO), GO
+    roots, plus information-artifact and relation types (IAO, RO, SIO)
+    drawn from the TranscriptoKG modelling vocabulary.
+
+    Each row carries the source ontology in the ``ontology`` column so
+    consumers can filter the resolved CURIE by axis (e.g. only INO/NCIT
+    when the qualifier is direction-of-regulation; only OBI when the
+    qualifier is study-protocol metadata).
+    """
+
+    def __init__(self, rows: list[dict[str, str]]):
+        self._rows = rows
+        self._by_term: dict[str, dict[str, str]] = {
+            row["term"].lower(): row for row in rows if row["term"]
+        }
+        self._by_label: dict[str, dict[str, str]] = {
+            row["label"].lower(): row for row in rows if row["label"]
+        }
+
+    def lookup(self, name: str) -> dict[str, str] | None:
+        """Return the matching row dict or ``None``.
+
+        Tries (in order): the lower-cased ``term`` column, then the canonical
+        ``label`` column. Both are case-insensitive.
+        """
+        if not isinstance(name, str):
+            return None
+        token = name.strip().lower()
+        if not token:
+            return None
+        return self._by_term.get(token) or self._by_label.get(token)
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+
+CONCEPT_INDEX: Final[ConceptIndex] = ConceptIndex(_load_concept_index_rows())

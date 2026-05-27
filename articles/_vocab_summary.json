@@ -1,0 +1,188 @@
+{
+  "per_file": {
+    "1-s2.0-S0092867418305968-main.pdf": {
+      "chars": 128320,
+      "hits": {
+        "platform": {
+          "Illumina": 5,
+          "NextSeq": 2
+        },
+        "protocol": {
+          "MARS-seq": 8,
+          "bulk RNA-seq": 1
+        },
+        "aligner_quant": {
+          "STAR": 7,
+          "Bowtie2": 4,
+          "Bowtie": 1
+        },
+        "de_tool": {
+          "DESeq2": 4
+        },
+        "stat_test": {
+          "Wilcoxon": 5,
+          "Benjamini-Hochberg": 1
+        }
+      }
+    },
+    "12915_2016_Article_282.pdf": {
+      "chars": 86286,
+      "hits": {}
+    },
+    "nihms-1007517.pdf": {
+      "chars": 65527,
+      "hits": {
+        "platform": {
+          "Illumina": 11,
+          "NovaSeq": 4
+        },
+        "protocol": {
+          "10x Genomics": 3,
+          "Smart-seq2": 1
+        },
+        "aligner_quant": {
+          "STAR": 1
+        },
+        "sc_tool": {
+          "Cell Ranger": 1,
+          "Seurat": 3
+        },
+        "stat_test": {
+          "Wilcoxon": 2
+        }
+      }
+    },
+    "nihms-1751017.pdf": {
+      "chars": 74967,
+      "hits": {
+        "platform": {
+          "Illumina": 14,
+          "NovaSeq": 3
+        },
+        "protocol": {
+          "Drop-seq": 12,
+          "Slide-seq": 109,
+          "Visium": 4
+        },
+        "aligner_quant": {
+          "STAR": 4
+        },
+        "sc_tool": {
+          "Seurat": 3
+        },
+        "qc": {
+          "Picard": 6
+        },
+        "stat_test": {
+          "Wilcoxon": 1,
+          "t-test": 3
+        }
+      }
+    },
+    "nihms-1856632.pdf": {
+      "chars": 55816,
+      "hits": {
+        "platform": {
+          "Illumina": 1,
+          "NovaSeq": 1
+        },
+        "aligner_quant": {
+          "STAR": 1
+        },
+        "sc_tool": {
+          "Cell Ranger": 1,
+          "scVI": 1
+        }
+      }
+    },
+    "s41592-024-02298-3.pdf": {
+      "chars": 139627,
+      "hits": {
+        "platform": {
+          "Illumina": 28,
+          "HiSeq": 1,
+          "PacBio": 174,
+          "Sequel": 2,
+          "Oxford Nanopore": 290
+        },
+        "protocol": {
+          "Iso-Seq": 3,
+          "ONT direct RNA": 1
+        },
+        "aligner_quant": {
+          "STAR": 1,
+          "minimap2": 11,
+          "RSEM": 19,
+          "StringTie": 1
+        },
+        "long_read_tool": {
+          "FLAIR": 27,
+          "TALON": 23,
+          "IsoQuant": 54,
+          "SQANTI": 16,
+          "StringTie2": 26,
+          "Bambu": 61,
+          "FLAMES": 22,
+          "LRGASP": 81
+        }
+      }
+    }
+  },
+  "totals": {
+    "platform": {
+      "Illumina": 59,
+      "NextSeq": 2,
+      "NovaSeq": 8,
+      "HiSeq": 1,
+      "PacBio": 174,
+      "Sequel": 2,
+      "Oxford Nanopore": 290
+    },
+    "protocol": {
+      "MARS-seq": 8,
+      "bulk RNA-seq": 1,
+      "10x Genomics": 3,
+      "Smart-seq2": 1,
+      "Drop-seq": 12,
+      "Slide-seq": 109,
+      "Visium": 4,
+      "Iso-Seq": 3,
+      "ONT direct RNA": 1
+    },
+    "aligner_quant": {
+      "STAR": 14,
+      "Bowtie2": 4,
+      "Bowtie": 1,
+      "minimap2": 11,
+      "RSEM": 19,
+      "StringTie": 1
+    },
+    "de_tool": {
+      "DESeq2": 4
+    },
+    "sc_tool": {
+      "Cell Ranger": 2,
+      "Seurat": 6,
+      "scVI": 1
+    },
+    "spatial_tool": {},
+    "long_read_tool": {
+      "FLAIR": 27,
+      "TALON": 23,
+      "IsoQuant": 54,
+      "SQANTI": 16,
+      "StringTie2": 26,
+      "Bambu": 61,
+      "FLAMES": 22,
+      "LRGASP": 81
+    },
+    "qc": {
+      "Picard": 6
+    },
+    "stat_test": {
+      "Wilcoxon": 8,
+      "Benjamini-Hochberg": 1,
+      "t-test": 3
+    }
+  }
+}

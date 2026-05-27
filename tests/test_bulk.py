@@ -6,7 +6,7 @@ import rdflib
 from indicium_adapters import CURRENT_API_VERSION, DomainAdapter, SHACLProvider
 
 from indicium_adapters_transcriptomics import BulkTranscriptomicsAdapter, accession_to_curie
-from indicium_adapters_transcriptomics._enrichment import GENE_INDEX
+from indicium_adapters_transcriptomics._enrichment import CONCEPT_INDEX, GENE_INDEX
 
 # --- Protocol conformance ---------------------------------------------------
 
@@ -258,6 +258,72 @@ def test_enrich_claim_object_slot_also_resolved():
         "object": "WNT4",
     })
     assert out["ontology_terms"]["object"] == "HGNC:12783"
+
+
+# --- concept enrichment scaffolding (v0.3.0) --------------------------------
+
+
+def test_concept_index_is_loadable():
+    """The CONCEPT_INDEX singleton must load at import time without raising,
+    even when the TSV is empty (e.g. pending OLS4 verification)."""
+    assert isinstance(len(CONCEPT_INDEX), int)
+    assert len(CONCEPT_INDEX) >= 0
+
+
+def test_concept_lookup_returns_none_for_unknown_term():
+    assert CONCEPT_INDEX.lookup("an entirely unfamiliar term") is None
+
+
+def test_concept_lookup_handles_empty_and_non_str_input():
+    assert CONCEPT_INDEX.lookup("") is None
+    assert CONCEPT_INDEX.lookup(None) is None  # type: ignore[arg-type]
+
+
+def test_enrich_claim_is_safe_noop_for_unknown_concept_terms():
+    """When neither subject nor object resolves through any of the
+    enrichment indices (gene / accession / anatomy / concept), the claim
+    must pass through untouched — the concept fallback must not invent
+    a CURIE."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "completely-bogus-term-zzz",
+        "qualifier": "differentially_expressed_in",
+        "object": "U0126",
+    })
+    assert "ontology_terms" not in out
+
+
+def test_concept_lookup_attaches_curie_and_xrefs(monkeypatch):
+    """Wiring contract for the concept-lookup branch in `enrich_claim`:
+    monkey-patches a single-row index in to exercise the path in
+    isolation from the bundled TSV and pin the output shape — principal
+    CURIE under `ontology_terms[slot]`, label + ontology + description
+    under `xrefs[slot]`."""
+    from indicium_adapters_transcriptomics import _enrichment, bulk
+
+    fake_row = {
+        "term": "fold change",
+        "curie": "NCIT:C60693",
+        "label": "Fold Change",
+        "description": "Ratio between two measurements.",
+        "ontology": "NCIT",
+        "source": "monkeypatch fixture",
+    }
+    fake_index = _enrichment.ConceptIndex([fake_row])
+    monkeypatch.setattr(bulk, "CONCEPT_INDEX", fake_index)
+
+    a = bulk.BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "fold change",
+        "qualifier": "differentially_expressed_in",
+        "object": "U0126",
+    })
+    assert out["ontology_terms"]["subject"] == "NCIT:C60693"
+    xref = out["xrefs"]["subject"]
+    assert xref["curie"] == "NCIT:C60693"
+    assert xref["label"] == "Fold Change"
+    assert xref["ontology"] == "NCIT"
+    assert "description" in xref
 
 
 @pytest.mark.parametrize(

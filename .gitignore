@@ -10,3 +10,8 @@ build/
 .venv/
 venv/
 .DS_Store
+
+# Mini-corpus PDFs are copyrighted (Cell, Nature, Science, BMC, Nat Methods,
+# Nat Biotech) and stay out of git. The extraction script and the derived
+# vocabulary JSONs under articles/ are tracked.
+articles/*.pdf
