@@ -21,7 +21,7 @@ from indicium_adapters_transcriptomics._registries import accession_to_curie
 from indicium_adapters_transcriptomics.bulk import BulkTranscriptomicsAdapter
 from indicium_adapters_transcriptomics.singlecell import SingleCellTranscriptomicsAdapter
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     "BulkTranscriptomicsAdapter",
     "SingleCellTranscriptomicsAdapter",

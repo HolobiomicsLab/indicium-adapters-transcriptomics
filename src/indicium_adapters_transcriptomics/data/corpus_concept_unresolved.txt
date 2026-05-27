@@ -1,0 +1,26 @@
+# Corpus terms with NO exact label/synonym match in any axis ontology.
+# Candidates for bio.tools integration, upstream ontology contribution, or alias-table curation in a later release.
+# Format: <axis>\t<term>
+
+protocol	10x Genomics
+protocol	Iso-Seq
+protocol	ONT direct RNA
+aligner_quant	STAR
+aligner_quant	Bowtie2
+aligner_quant	Bowtie
+aligner_quant	minimap2
+aligner_quant	RSEM
+aligner_quant	StringTie
+de_tool	DESeq2
+sc_tool	Cell Ranger
+sc_tool	Seurat
+sc_tool	scVI
+long_read_tool	FLAIR
+long_read_tool	TALON
+long_read_tool	IsoQuant
+long_read_tool	SQANTI
+long_read_tool	StringTie2
+long_read_tool	Bambu
+long_read_tool	FLAMES
+long_read_tool	LRGASP
+qc	Picard

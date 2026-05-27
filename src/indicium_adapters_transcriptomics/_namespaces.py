@@ -19,6 +19,9 @@ SO: Final[str] = "http://purl.obolibrary.org/obo/SO_"
 MONDO: Final[str] = "http://purl.obolibrary.org/obo/MONDO_"
 PATO: Final[str] = "http://purl.obolibrary.org/obo/PATO_"
 EDAM: Final[str] = "http://edamontology.org/"
+# bio.tools registry — canonical home for bioinformatics software
+# (STAR, Seurat, DESeq2, ...). Resolves to https://bio.tools/<id>.
+BIOTOOLS: Final[str] = "https://bio.tools/"
 
 # Concept / process / artifact ontologies — added in v0.3.0 to align with
 # the TranscriptoKG modelling vocabulary (which uses NCIT for analysis
@@ -60,6 +63,7 @@ TRANSCRIPTOMICS_PREFIXES: Final[dict[str, str]] = {
     "MONDO": MONDO,
     "PATO": PATO,
     "EDAM": EDAM,
+    "biotools": BIOTOOLS,
     # Concept / process / artifact axes (v0.3.0)
     "INO": INO,
     "NCIT": NCIT,

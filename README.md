@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.3.0 ships two sibling adapters:
+v0.3.1 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -20,13 +20,33 @@ v0.3.0 ships two sibling adapters:
   Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
   enrichment via the Cell Ontology (CL) is on the v0.2.1 roadmap.
 
-Both adapters also share a **concept index** (v0.3.0) — 31 OLS4-verified
-CURIEs across INO (regulation), NCIT (analysis concepts), GO (roots), OBI
-(investigation / assay / protocol) and STATO (statistical variables) —
-covering terms like *fold change*, *log2*, *up-regulation*, *RNA
-sequencing assay*, *multiple comparison adjustment*. The lookup runs
-after the domain-specific resolvers (gene / accession / anatomy), so
-domain hits always win.
+Both adapters also share a **concept index** (v0.3.0 + v0.3.1) — 56
+verified CURIEs across three sources:
+
+- **Static (v0.3.0, 31 rows)** — drawn from the TranscriptoKG modelling
+  vocabulary: INO regulation processes, NCIT analysis concepts, GO
+  roots, OBI investigation / role / protocol / DE-transformation /
+  RNA-sequencing, STATO statistical variables. Covers terms like
+  *fold change*, *log2*, *up-regulation*, *RNA sequencing assay*,
+  *multiple comparison adjustment*.
+- **OLS4 corpus-harvested (v0.3.1, 16 rows)** — cascade of three
+  match modes against OLS4, re-verified by IRI lookup:
+  - *exact* (6): `Illumina`, `MARS-seq`, `Smart-seq2`, `Drop-seq`,
+    `Slide-seq`, `t-test`.
+  - *prefix* (6, lets descriptive suffixes through): `Wilcoxon` →
+    Wilcoxon Signed Rank Test, `bulk RNA-seq` → bulk RNA-seq assay,
+    `Visium` → Visium Spatial Gene Expression, `Benjamini-Hochberg`,
+    `PacBio`, `Oxford Nanopore`.
+  - *substring* (4, instrument families): `NovaSeq` → Illumina
+    NovaSeq 6000, `HiSeq`, `NextSeq`, `Sequel`.
+- **bio.tools registry (v0.3.1, 9 rows)** — direct-ID + normalised
+  name search on https://bio.tools/, canonical registry for
+  bioinformatics software: `STAR`, `Bowtie`, `Bowtie2` (matched via
+  whitespace normalisation against bio.tools name "Bowtie 2"),
+  `Minimap2`, `RSEM`, `StringTie`, `DESeq2`, `Seurat`, `Picard`.
+
+The lookup runs after the domain-specific resolvers (gene / accession /
+anatomy), so domain hits always win.
 
 Both register under the `indicium.adapters` entry-point group and are
 discoverable via `indicium_adapters.discover_adapters()`. Their qualifier sets
@@ -103,12 +123,13 @@ enriched = bulk.enrich_claim({
     "qualifier": "tested_with",
     "object": "DESeq2",
 })
-# enriched["ontology_terms"]["subject"] == "NCIT:C60693"
-# enriched["xrefs"]["subject"] == {
-#     "curie": "NCIT:C60693",
-#     "label": "Fold Change",
-#     "ontology": "NCIT",
-#     "description": "An indication of the magnitude difference ...",
+# enriched["ontology_terms"]["subject"] == "NCIT:C60693"  (Fold Change)
+# enriched["ontology_terms"]["object"]  == "biotools:deseq2"
+# enriched["xrefs"]["object"] == {
+#     "curie": "biotools:deseq2",
+#     "label": "DESeq2",
+#     "ontology": "biotools",
+#     "description": "R/Bioconductor package for differential gene ...",
 # }
 
 # Use both adapters at once via the composition helper

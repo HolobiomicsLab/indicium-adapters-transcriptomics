@@ -73,16 +73,42 @@ new benchmark papers reveal the need.
   runs after gene / accession / anatomy resolution so domain-specific
   hits always win.
 
-### v0.3.1 — corpus-driven concept harvesting
-- `data/build_corpus_concept_candidates.py`: ingests `articles/`
-  per-paper vocab JSONs (produced by `_extract_vocab.py` over the
-  6-paper mini-corpus) and uses the OLS4 `search-by-label` endpoint
-  to *propose* candidate CURIEs for the ~25 extracted methodological
-  terms (STAR, Seurat, MARS-seq, Illumina, 10x, ...). Every proposed
-  CURIE is then re-verified by IRI lookup before landing in
-  `concept_index.tsv`.
-- Strict no-hand-curation rule: candidates are accepted only when the
-  OLS4 label is an exact match (case-insensitive) for the corpus term.
+### v0.3.1 — corpus-driven concept harvesting: OLS4 cascade + bio.tools normalised (done)
+- `data/build_corpus_concept_candidates.py` ingests the per-paper vocab
+  JSONs and runs a **per-axis cascade** of match modes against OLS4
+  (`exact` → `prefix` → `substring`), re-verifying each candidate
+  by IRI lookup.
+  - protocol / stat_test axes get `exact` + `prefix` (catches
+    "Wilcoxon" → "Wilcoxon Signed Rank Test", "Visium" → "Visium
+    Spatial Gene Expression", "bulk RNA-seq" → "bulk RNA-seq assay").
+  - platform axis adds `substring` (catches "NovaSeq" → "Illumina
+    NovaSeq 6000", "HiSeq" → "Illumina HiSeq 2000").
+- `data/build_biotools_index.py` picks up where OLS4 left off with
+  direct-ID lookup + name-normalised search fallback (drops
+  whitespace / hyphens / underscores so corpus `Bowtie2` matches
+  bio.tools canonical name `Bowtie 2`).
+- Combined yield: **25/38 terms resolved** (~66%) — 16 OLS4
+  (6 exact + 6 prefix + 4 substring) + 9 bio.tools.
+- 13 terms still unresolved: niche long-read tools (FLAIR, TALON,
+  IsoQuant, SQANTI, StringTie2, Bambu, FLAMES, LRGASP) which do not
+  exist in OLS4 ontologies or bio.tools registry; plus a few protocols
+  (`10x Genomics`, `Iso-Seq`, `ONT direct RNA`) and software
+  (`Cell Ranger`, `scVI`) similarly absent.
+- Triple-TSV loader in `ConceptIndex`: static (v0.3.0) → OLS4
+  corpus (v0.3.1) → bio.tools (v0.3.1). Collision rule: first match
+  wins, encoding a "grounding priority" ladder.
+
+### v0.4.0 — qualifier-aware resolution
+- A surprise found in v0.3.1: some software names (`STAR`, `Picard`)
+  collide with HGNC gene symbols (HGNC:11359, HGNC:11305). Today the
+  resolver runs gene-lookup before concept-lookup, so a bare `STAR`
+  always resolves to the gene. This is correct most of the time
+  (gene mentions dominate transcriptomics claims) but can be wrong
+  in study-metadata contexts (`aligned_with: STAR` is the aligner).
+- v0.4.0 introduces qualifier-aware resolution: a per-qualifier
+  preference order for the resolution chain
+  (`aligned_with`/`quantified_with` → bio.tools first;
+  `differentially_expressed_in`/`expressed_in` → genes first).
 
 ### v0.4.0+ — broader coverage
 - Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO

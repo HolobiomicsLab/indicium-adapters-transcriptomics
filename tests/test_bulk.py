@@ -293,6 +293,129 @@ def test_enrich_claim_is_safe_noop_for_unknown_concept_terms():
     assert "ontology_terms" not in out
 
 
+# --- corpus concept index (v0.3.1) ------------------------------------------
+
+
+def test_corpus_concept_terms_resolve_via_concept_index():
+    """v0.3.1 ships a corpus-driven concept index harvested from the
+    6-paper mini-corpus. 16 terms resolved via OLS4 across three match
+    modes (exact / prefix / substring). Pin each one so a regression
+    in either the harvester or the dual-TSV loader is caught
+    immediately."""
+    expected = {
+        # term              (curie,           ontology, axis,         mode)
+        # --- exact-match (label or synonym == corpus term) ---
+        "illumina":         ("NCIT:C215820",  "NCIT",   "platform",   "exact"),
+        "mars-seq":         ("EFO:0008796",   "EFO",    "protocol",   "exact"),
+        "smart-seq2":       ("EFO:0008931",   "EFO",    "protocol",   "exact"),
+        "drop-seq":         ("EFO:0008722",   "EFO",    "protocol",   "exact"),
+        "slide-seq":        ("EFO:0009920",   "EFO",    "protocol",   "exact"),
+        "t-test":           ("NCIT:C53231",   "NCIT",   "stat_test",  "exact"),
+        # --- prefix-match (corpus term = whole-word prefix of label) ---
+        "pacbio":           ("EFO:0920006",   "EFO",    "platform",   "prefix"),
+        "oxford nanopore":  ("OBI:0002750",   "OBI",    "platform",   "prefix"),
+        "bulk rna-seq":     ("OBI:0003090",   "OBI",    "protocol",   "prefix"),
+        "visium":           ("EFO:0010961",   "EFO",    "protocol",   "prefix"),
+        "wilcoxon":         ("NCIT:C53246",   "NCIT",   "stat_test",  "prefix"),
+        "benjamini-hochberg": ("NCIT:C61596", "NCIT",   "stat_test",  "prefix"),
+        # --- substring-match (corpus term = whole-word substring of label;
+        # used for instrument families whose canonical EFO label
+        # prepends a vendor name) ---
+        "nextseq":          ("EFO:0008566",   "EFO",    "platform",   "substring"),
+        "novaseq":          ("EFO:0008637",   "EFO",    "platform",   "substring"),
+        "hiseq":            ("EFO:0004203",   "EFO",    "platform",   "substring"),
+        "sequel":           ("EFO:0008630",   "EFO",    "platform",   "substring"),
+    }
+    for term, (curie, ontology, axis, mode) in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"corpus term {term!r} should resolve"
+        assert row["curie"] == curie, (
+            f"{term!r}: expected {curie}, got {row['curie']}"
+        )
+        assert row["ontology"] == ontology
+        # source column: "corpus extraction (<axis>, <mode>-match)"
+        assert axis in row["source"]
+        assert f"{mode}-match" in row["source"]
+
+
+def test_corpus_concept_resolution_is_end_to_end_through_enrich_claim():
+    """End-to-end: a claim mentioning a corpus-resolved term must get
+    the CURIE attached by `enrich_claim()` without monkey-patching."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "sequenced_on",
+        "object": "Illumina",
+    })
+    assert out["ontology_terms"]["object"] == "NCIT:C215820"
+    xref = out["xrefs"]["object"]
+    assert xref["curie"] == "NCIT:C215820"
+    assert xref["ontology"] == "NCIT"
+    assert xref["label"] == "Illumina"
+
+
+def test_concept_index_carries_static_corpus_and_biotools_rows():
+    """The triple-TSV loader must surface all three sources through the
+    same singleton — static (v0.3.0) + OLS4 corpus (v0.3.1) + bio.tools
+    (v0.3.1). Lower bound only, so adding rows in any file does not
+    break the test."""
+    n = len(CONCEPT_INDEX)
+    # 31 static + 16 OLS4-corpus + 9 bio.tools = 56 minimum.
+    assert n >= 31 + 16 + 9, f"expected ≥56 concept rows, got {n}"
+
+
+# --- bio.tools concept index (v0.3.1) ---------------------------------------
+
+
+def test_biotools_software_terms_resolve_via_concept_index():
+    """v0.3.1 also ships a bio.tools-driven concept index covering the
+    bioinformatics software referenced in the corpus. Nine terms
+    resolved via the bio.tools registry (direct-ID lookup + search
+    fallback with case + whitespace + hyphen normalisation —
+    ``Bowtie2`` (corpus) ↔ ``Bowtie 2`` (bio.tools name) for example)."""
+    expected = {
+        "star":       ("biotools:star",         "aligner_quant"),
+        "bowtie":     ("biotools:bowtie",       "aligner_quant"),
+        "bowtie2":    ("biotools:bowtie2",      "aligner_quant"),
+        "minimap2":   ("biotools:minimap2",     "aligner_quant"),
+        "rsem":       ("biotools:rsem",         "aligner_quant"),
+        "stringtie":  ("biotools:stringtie",    "aligner_quant"),
+        "deseq2":     ("biotools:deseq2",       "de_tool"),
+        "seurat":     ("biotools:seurat",       "sc_tool"),
+        "picard":     ("biotools:picard_tools", "qc"),
+    }
+    for term, (curie, axis) in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"bio.tools term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "biotools"
+        assert axis in row["source"]
+
+
+def test_biotools_resolution_is_end_to_end_through_enrich_claim():
+    """A claim mentioning a bio.tools-resolved software name gets the
+    biotools CURIE attached via the standard enrich_claim path —
+    nothing special wired for bio.tools entries vs OLS4 entries.
+
+    ``minimap2`` is used (not ``STAR`` / ``Picard``) because some short
+    tool names also exist as HGNC gene symbols (e.g. STAR = HGNC:11359
+    steroidogenic acute regulatory protein). Gene lookup runs before
+    concept lookup by design — that ordering is asserted elsewhere in
+    the test suite — so this test deliberately picks a term that only
+    exists as a bio.tools entry."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "aligned_with",
+        "object": "minimap2",
+    })
+    assert out["ontology_terms"]["object"] == "biotools:minimap2"
+    xref = out["xrefs"]["object"]
+    assert xref["curie"] == "biotools:minimap2"
+    assert xref["ontology"] == "biotools"
+    assert xref["label"] == "Minimap2"
+
+
 def test_concept_lookup_attaches_curie_and_xrefs(monkeypatch):
     """Wiring contract for the concept-lookup branch in `enrich_claim`:
     monkey-patches a single-row index in to exercise the path in

@@ -1,0 +1,19 @@
+# Terms still unresolved after OLS4 + bio.tools harvests.
+# Candidates for the v0.3.3 instrument-series alias table
+# (NovaSeq / HiSeq / PacBio / Oxford Nanopore...), upstream
+# ontology contributions, or hand-mapping.
+# Format: <axis>\t<term>
+
+sc_tool	Cell Ranger
+sc_tool	scVI
+long_read_tool	FLAIR
+long_read_tool	TALON
+long_read_tool	IsoQuant
+long_read_tool	SQANTI
+long_read_tool	StringTie2
+long_read_tool	Bambu
+long_read_tool	FLAMES
+long_read_tool	LRGASP
+protocol	10x Genomics
+protocol	Iso-Seq
+protocol	ONT direct RNA

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "indicium-adapters-transcriptomics"
-version = "0.3.0"
+version = "0.3.1"
 description = "Transcriptomics-domain DomainAdapters for the indicium ecosystem"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -61,6 +61,8 @@ omit = [
     "src/indicium_adapters_transcriptomics/data/build_gene_index.py",
     "src/indicium_adapters_transcriptomics/data/build_anatomy_index.py",
     "src/indicium_adapters_transcriptomics/data/build_concept_index.py",
+    "src/indicium_adapters_transcriptomics/data/build_corpus_concept_candidates.py",
+    "src/indicium_adapters_transcriptomics/data/build_biotools_index.py",
     "src/indicium_adapters_transcriptomics/data/build_vocabs.py",
 ]
 

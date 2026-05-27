@@ -1,5 +1,113 @@
 # Changelog
 
+## v0.3.1 — corpus-driven concept harvest: OLS4 (cascade modes) + bio.tools (2026-05-27)
+
+### Added — OLS4 corpus harvester with cascade match modes
+
+- `data/build_corpus_concept_candidates.py` maintainer script that
+  ingests the per-paper vocabulary JSONs produced by
+  `articles/_extract_vocab.py` over the 6-paper mini-corpus and uses
+  the **OLS4 search-by-label** endpoint to propose CURIEs, then
+  re-verifies each by IRI lookup. Hand-curation of CURIEs is avoided;
+  the only curation is the axis → ontology preference list and the
+  axis → match-mode declaration.
+- Per-axis **cascade of match modes** tried in order; the first hit
+  wins. Strictness beats preference: an exact match in any preferred
+  ontology beats a relaxed match in the first preferred ontology.
+  - `exact` — label or synonym equals the corpus term verbatim
+    (case-insensitive). Default for all software axes and for high-
+    precision lookups.
+  - `prefix` — corpus term is a whole-word **prefix** of the OLS4
+    label (lets descriptive suffixes through: "Wilcoxon" → "Wilcoxon
+    Signed Rank Test"; "bulk RNA-seq" → "bulk RNA-seq assay";
+    "Visium" → "Visium Spatial Gene Expression"). Used by
+    `protocol` and `stat_test` axes.
+  - `substring` — corpus term is a whole-word **substring** of the
+    OLS4 label (handles instrument families whose canonical label
+    prepends a vendor name: "NovaSeq" → "Illumina NovaSeq 6000").
+    Used by the `platform` axis only; OLS4 ranking picks the
+    canonical model.
+- Bundled `data/corpus_concept_index.tsv` — **16 verified entries**:
+  - exact-match (6): `Illumina` (NCIT:C215820), `MARS-seq`
+    (EFO:0008796), `Smart-seq2` (EFO:0008931), `Drop-seq`
+    (EFO:0008722), `Slide-seq` (EFO:0009920), `t-test` (NCIT:C53231,
+    via synonym).
+  - prefix-match (6): `PacBio` (EFO:0920006 PacBio Revio),
+    `Oxford Nanopore` (OBI:0002750 Oxford Nanopore MinION),
+    `bulk RNA-seq` (OBI:0003090), `Visium` (EFO:0010961),
+    `Wilcoxon` (NCIT:C53246), `Benjamini-Hochberg` (NCIT:C61596).
+  - substring-match (4): `NextSeq` (EFO:0008566 Illumina NextSeq 550),
+    `NovaSeq` (EFO:0008637 Illumina NovaSeq 6000), `HiSeq`
+    (EFO:0004203 Illumina HiSeq 2000), `Sequel` (EFO:0008630
+    PacBio Sequel system).
+- The match mode is tagged in the TSV's `source` column
+  (`corpus extraction (<axis>, <mode>-match)`) so the provenance of
+  each row is auditable.
+
+### Added — bio.tools registry harvester (with name normalisation)
+
+- `data/build_biotools_index.py` maintainer script picking up where
+  OLS4 left off: for software-axis terms still unresolved, queries
+  the **bio.tools registry**, the canonical home for bioinformatics
+  tools. Two-step resolution per term:
+  1. Direct API lookup `GET https://bio.tools/api/<id>/?format=json`
+     with a normalised ID (lowercased, spaces → hyphens).
+  2. If 404, search endpoint with paginated results, filtered
+     client-side for **exact name match (case-insensitive)** — and
+     additionally for a **normalised-name match** that drops
+     whitespace / hyphens / underscores so corpus `Bowtie2` matches
+     the canonical bio.tools name `Bowtie 2`. Without this
+     normalisation step the OLS4 harvester's substring trick has no
+     bio.tools equivalent.
+- Bundled `data/biotools_concept_index.tsv` — **9 verified entries**:
+  `STAR` (biotools:star), `Bowtie` (biotools:bowtie), **`Bowtie2`**
+  (biotools:bowtie2, via name normalisation), `Minimap2`
+  (biotools:minimap2), `RSEM` (biotools:rsem), `StringTie`
+  (biotools:stringtie), `DESeq2` (biotools:deseq2), `Seurat`
+  (biotools:seurat), `Picard` (biotools:picard_tools).
+- New `biotools:` prefix in `TRANSCRIPTOMICS_PREFIXES` (resolves to
+  `https://bio.tools/<id>`).
+- `data/biotools_unresolved.txt` — final log of the 13 corpus terms
+  not findable in OLS4 nor bio.tools. Almost all are long-read tools
+  (FLAIR, TALON, IsoQuant, SQANTI, StringTie2, Bambu, FLAMES, LRGASP)
+  that genuinely do not exist in either registry — they live in
+  their authors' GitHub / Zenodo only.
+
+### Added — runtime + tests
+
+- **Triple-TSV loader** in `_enrichment._load_concept_index_rows()`:
+  loads `concept_index.tsv` → `corpus_concept_index.tsv` →
+  `biotools_concept_index.tsv` in that order. A hypothetical
+  collision resolves to the first occurrence: paper-modelling-
+  grounded (static) wins over OLS4 method-mention wins over
+  bio.tools-registry.
+- 6 regression tests covering: pinned resolution for each of the 16
+  OLS4-corpus terms (with the match-mode tag asserted in the source
+  column), pinned resolution for each of the 9 bio.tools terms, two
+  end-to-end `enrich_claim()` paths (one OLS4-resolved platform via
+  `Illumina`, one bio.tools-resolved aligner via `minimap2` — `STAR`
+  is deliberately avoided because it also matches HGNC:11359
+  steroidogenic acute regulatory protein, which gene-lookup correctly
+  resolves first), and the triple-TSV size lower bound (≥56 rows).
+
+### Notes
+
+- Total v0.3.1 yield: **25/38 corpus terms resolved** (~66%) —
+  16 via OLS4 (6 exact + 6 prefix + 4 substring) + 9 via bio.tools.
+- The 13 still-unresolved terms fall into one clean bucket: niche
+  long-read tools that are genuinely outside both OLS4 (no ontology
+  covers them) and bio.tools (not registered). Resolution would
+  require either upstream registry contributions or per-tool
+  GitHub/Zenodo CURIE schemes — neither is on the v0.3.x roadmap.
+- A surprise found while writing the tests: some short bio.tools
+  software names (`STAR`, `Picard`) **also** exist as HGNC gene
+  symbols. The current resolver runs gene-lookup before
+  concept-lookup, so a bare `STAR` in a claim resolves to HGNC:11359.
+  This is correct default behaviour (gene mentions are more frequent
+  in transcriptomics claims), but a qualifier-aware resolver
+  (`aligned_with` → prefer bio.tools; `expressed_in` → prefer HGNC)
+  would be a useful v0.4.0 refinement.
+
 ## v0.3.0 — TranscriptoKG concept-index enrichment (NCIT / INO / OBI / STATO / GO) (2026-05-27)
 
 ### Added
