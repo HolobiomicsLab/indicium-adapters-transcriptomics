@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.4.0 — qualifier-aware resolution priority (2026-05-27)
+
+### Changed
+
+- `BulkTranscriptomicsAdapter.enrich_claim()` is now **qualifier-aware**.
+  Previously the resolver chain was hardcoded
+  ``accession`` → ``gene`` → ``concept`` for all qualifiers; this always
+  resolved short ambiguous names like ``STAR`` to the HGNC gene
+  (HGNC:11359, steroidogenic acute regulatory protein) even when the
+  claim's qualifier made it obvious the term was the aligner.
+- Two priority orders are now defined and picked per claim:
+  - **Default** (``accession`` → ``gene`` → ``concept``) — used for the
+    claim-level feature qualifiers (``differentially_expressed_in``,
+    ``co_expressed_with``, ``enriched_for``, ``expressed_in``,
+    ``marker_of``, ``regulated_by``) and for ``consolidates_dataset``.
+    Gene mentions dominate these claims, so gene-lookup wins for
+    collision-prone names.
+  - **Study-level** (``concept`` → ``accession`` → ``gene``) — used for
+    the six study-metadata qualifiers ``sequenced_on``,
+    ``aligned_with``, ``quantified_with``, ``normalized_with``,
+    ``tested_with``, ``uses_database``. Object slot of these is a tool
+    / platform / database name, so the concept index (including
+    bio.tools) wins; the gene resolver only fires as a fallback.
+- Internally, the three previously-inlined resolvers are now
+  first-class functions (``_resolve_accession``, ``_resolve_gene``,
+  ``_resolve_concept``) dispatched through a ``_RESOLVERS`` map. Each
+  returns ``(curie, xrefs_dict) | None`` so the resolver-chain is now
+  a simple loop. Same shape, half the code.
+
+### Added
+
+- 4 regression tests pinning the v0.4.0 contract:
+  - ``aligned_with: <study> STAR`` → ``biotools:star`` (was HGNC:11359
+    pre-v0.4.0).
+  - ``expressed_in: STAR <something>`` → ``HGNC:11359`` (gene-priority
+    preserved for feature qualifiers).
+  - Missing or unknown qualifier → default priority (safe fallback).
+  - Study-level priority still falls through to gene-lookup when the
+    concept index has no hit, so a ``aligned_with`` claim whose object
+    is a gene name (sloppy LLM output) still gets a CURIE rather than
+    a dropped slot.
+
+### Notes
+
+- ``SingleCellTranscriptomicsAdapter`` was **deliberately left
+  unchanged**. Its qualifiers are all claim-level (cell-resolution
+  feature assertions), it doesn't expose a gene resolver, and there's
+  no collision to disambiguate. A symmetrical refactor would have
+  been pure structural churn — to be done when single-cell gains a
+  gene resolver (probably v0.4.1+) or its own study-level qualifiers.
+- The 13 corpus terms unresolved at v0.3.1 (Cell Ranger, scVI, FLAIR,
+  TALON, IsoQuant, SQANTI, StringTie2, Bambu, FLAMES, LRGASP, 10x
+  Genomics, Iso-Seq, ONT direct RNA) are unaffected by v0.4.0 — they
+  were absent from both OLS4 and bio.tools, not blocked by priority
+  ordering.
+
 ## v0.3.1 — corpus-driven concept harvest: OLS4 (cascade modes) + bio.tools (2026-05-27)
 
 ### Added — OLS4 corpus harvester with cascade match modes

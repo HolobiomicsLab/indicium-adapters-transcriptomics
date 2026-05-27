@@ -394,15 +394,13 @@ def test_biotools_software_terms_resolve_via_concept_index():
 
 def test_biotools_resolution_is_end_to_end_through_enrich_claim():
     """A claim mentioning a bio.tools-resolved software name gets the
-    biotools CURIE attached via the standard enrich_claim path —
-    nothing special wired for bio.tools entries vs OLS4 entries.
+    biotools CURIE attached via the standard enrich_claim path.
 
-    ``minimap2`` is used (not ``STAR`` / ``Picard``) because some short
-    tool names also exist as HGNC gene symbols (e.g. STAR = HGNC:11359
-    steroidogenic acute regulatory protein). Gene lookup runs before
-    concept lookup by design — that ordering is asserted elsewhere in
-    the test suite — so this test deliberately picks a term that only
-    exists as a bio.tools entry."""
+    ``minimap2`` is used here because it has no HGNC gene-symbol
+    collision — so it resolves to ``biotools:minimap2`` regardless of
+    whether the v0.4.0 qualifier-aware priority order or the default
+    order is in effect. The qualifier-aware path is exercised
+    separately by ``test_aligned_with_*`` below."""
     a = BulkTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "study_42",
@@ -414,6 +412,79 @@ def test_biotools_resolution_is_end_to_end_through_enrich_claim():
     assert xref["curie"] == "biotools:minimap2"
     assert xref["ontology"] == "biotools"
     assert xref["label"] == "Minimap2"
+
+
+# --- qualifier-aware resolution (v0.4.0) ------------------------------------
+
+
+def test_aligned_with_qualifier_resolves_star_as_aligner_not_gene():
+    """v0.4.0 contract: study-level qualifiers (``aligned_with`` here)
+    use ``concept`` → ``accession`` → ``gene`` resolver priority. So
+    a claim ``aligned_with: <study> STAR`` correctly resolves ``STAR``
+    to ``biotools:star`` (the aligner) — even though ``STAR`` is also
+    a valid HGNC gene symbol (HGNC:11359, steroidogenic acute
+    regulatory protein). Pre-v0.4.0 this resolved to the gene because
+    gene-lookup always ran first."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "aligned_with",
+        "object": "STAR",
+    })
+    assert out["ontology_terms"]["object"] == "biotools:star"
+    assert out["xrefs"]["object"]["ontology"] == "biotools"
+
+
+def test_expressed_in_qualifier_keeps_gene_priority_for_star():
+    """v0.4.0 contract (mirror of the above): claim-level feature
+    qualifiers (``expressed_in`` here) keep the default
+    ``accession`` → ``gene`` → ``concept`` order, so the same name
+    ``STAR`` resolves to ``HGNC:11359`` — the steroidogenic acute
+    regulatory protein gene — because feature claims are dominated by
+    gene mentions."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "STAR",
+        "qualifier": "expressed_in",
+        "object": "mesentery",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:11359"
+
+
+def test_missing_qualifier_falls_back_to_default_priority():
+    """If a claim arrives without a qualifier (or with an unknown
+    qualifier), the resolver chain defaults to
+    ``accession`` → ``gene`` → ``concept`` — the safe choice for
+    feature claims, which dominate the transcriptomics adapter's
+    use cases."""
+    a = BulkTranscriptomicsAdapter()
+    # No qualifier at all.
+    out = a.enrich_claim({"subject": "STAR"})
+    assert out["ontology_terms"]["subject"] == "HGNC:11359"
+
+    # Unknown qualifier.
+    out = a.enrich_claim({
+        "subject": "STAR",
+        "qualifier": "some_qualifier_we_dont_recognize",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:11359"
+
+
+def test_study_level_priority_still_falls_through_to_gene():
+    """When a study-level qualifier names a term that's *not* in the
+    concept index and *not* an accession, the resolver chain falls
+    through to gene-lookup — so claim shapes like
+    ``aligned_with: <study> WNT4`` (nonsensical but possible from a
+    sloppy extractor) still attach a CURIE rather than dropping the
+    slot entirely. The principle: relaxed priority never *removes*
+    resolution, only re-orders it."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "aligned_with",
+        "object": "WNT4",  # not in concept index, but is a gene
+    })
+    assert out["ontology_terms"]["object"] == "HGNC:12783"
 
 
 def test_concept_lookup_attaches_curie_and_xrefs(monkeypatch):

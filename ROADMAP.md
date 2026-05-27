@@ -98,17 +98,29 @@ new benchmark papers reveal the need.
   corpus (v0.3.1) → bio.tools (v0.3.1). Collision rule: first match
   wins, encoding a "grounding priority" ladder.
 
-### v0.4.0 — qualifier-aware resolution
-- A surprise found in v0.3.1: some software names (`STAR`, `Picard`)
-  collide with HGNC gene symbols (HGNC:11359, HGNC:11305). Today the
-  resolver runs gene-lookup before concept-lookup, so a bare `STAR`
-  always resolves to the gene. This is correct most of the time
-  (gene mentions dominate transcriptomics claims) but can be wrong
-  in study-metadata contexts (`aligned_with: STAR` is the aligner).
-- v0.4.0 introduces qualifier-aware resolution: a per-qualifier
-  preference order for the resolution chain
-  (`aligned_with`/`quantified_with` → bio.tools first;
-  `differentially_expressed_in`/`expressed_in` → genes first).
+### v0.4.0 — qualifier-aware resolution (done)
+- `BulkTranscriptomicsAdapter.enrich_claim()` now picks its resolver
+  chain based on the claim's qualifier:
+  - Study-level qualifiers (`sequenced_on`, `aligned_with`,
+    `quantified_with`, `normalized_with`, `tested_with`,
+    `uses_database`) use `concept → accession → gene` — fixes the
+    STAR/HGNC collision: `aligned_with: <study> STAR` now resolves
+    to `biotools:star` instead of HGNC:11359.
+  - Feature qualifiers and `consolidates_dataset` keep the default
+    `accession → gene → concept`.
+- The three resolvers (accession / gene / concept) are now first-class
+  functions dispatched through a `_RESOLVERS` map — easier to extend
+  when new resolution sources land.
+
+### v0.4.1 — SingleCell gene resolver (deferred)
+- `SingleCellTranscriptomicsAdapter` currently lacks a gene-name
+  resolver — single-cell claims about gene markers
+  (`marker_of_cell_type: <gene> <cell_type>`) don't get HGNC CURIEs.
+  Wiring `GENE_INDEX` into single-cell's `enrich_claim()` is mostly
+  a copy-paste of the bulk dispatcher, but it raises questions about
+  the right resolver chain for single-cell (gene first by default,
+  but what about the spatial-localisation qualifiers where the
+  object is anatomy?).
 
 ### v0.4.0+ — broader coverage
 - Contribute cnidarian-specific anatomy terms upstream to UBERON / CARO

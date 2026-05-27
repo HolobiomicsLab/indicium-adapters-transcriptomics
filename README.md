@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.3.1 ships two sibling adapters:
+v0.4.0 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -45,8 +45,20 @@ verified CURIEs across three sources:
   whitespace normalisation against bio.tools name "Bowtie 2"),
   `Minimap2`, `RSEM`, `StringTie`, `DESeq2`, `Seurat`, `Picard`.
 
-The lookup runs after the domain-specific resolvers (gene / accession /
-anatomy), so domain hits always win.
+**v0.4.0 — qualifier-aware resolution priority.** `enrich_claim()`
+picks its resolver chain based on the claim's qualifier:
+
+- Study-level qualifiers (`sequenced_on`, `aligned_with`,
+  `quantified_with`, `normalized_with`, `tested_with`, `uses_database`)
+  use `concept → accession → gene` priority — so a tool name like
+  `STAR` in `aligned_with: <study> STAR` resolves to `biotools:star`
+  (the aligner) rather than `HGNC:11359` (the steroidogenic acute
+  regulatory protein gene with the same symbol).
+- Feature qualifiers (`differentially_expressed_in`, `expressed_in`,
+  `marker_of`, `regulated_by`, etc.) and `consolidates_dataset` keep
+  the default `accession → gene → concept` order — gene mentions
+  dominate feature claims, so gene-lookup wins for collision-prone
+  names.
 
 Both register under the `indicium.adapters` entry-point group and are
 discoverable via `indicium_adapters.discover_adapters()`. Their qualifier sets
@@ -125,6 +137,19 @@ enriched = bulk.enrich_claim({
 })
 # enriched["ontology_terms"]["subject"] == "NCIT:C60693"  (Fold Change)
 # enriched["ontology_terms"]["object"]  == "biotools:deseq2"
+
+# 6) Same name, different qualifier → different CURIE (v0.4.0)
+#    "STAR" is both an aligner (biotools:star) and a gene symbol
+#    (HGNC:11359). The qualifier disambiguates.
+enriched_aligner = bulk.enrich_claim({
+    "subject": "study_42", "qualifier": "aligned_with", "object": "STAR",
+})
+# enriched_aligner["ontology_terms"]["object"] == "biotools:star"
+
+enriched_gene = bulk.enrich_claim({
+    "subject": "STAR", "qualifier": "expressed_in", "object": "mesentery",
+})
+# enriched_gene["ontology_terms"]["subject"] == "HGNC:11359"
 # enriched["xrefs"]["object"] == {
 #     "curie": "biotools:deseq2",
 #     "label": "DESeq2",
