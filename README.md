@@ -2,7 +2,9 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.7.0 ships two sibling adapters + a `parsers/` subpackage:
+v0.8.0 ships two sibling adapters + a `parsers/` subpackage + a
+multi-ontology concept index (11 source TSVs covering ~246 verified
+CURIEs across the transcriptomics-relevant ontology landscape):
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository

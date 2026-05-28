@@ -145,6 +145,22 @@ new benchmark papers reveal the need.
   cross-reference files per release. Join on FlyBase / WormBase
   id to populate ``ensembl`` for these rows.
 
+### v0.8.0 — Top-7 OLS4 ontology indexes (done)
+- ``data/build_extra_ontology_indexes.py`` harvests CHEBI / HP / MP /
+  DOID / PR / OBA / ENVO via the same cascade pattern as v0.5.0 CL.
+  154 new CURIEs total; concept index grows from ~92 to ~246 rows.
+- ``articles/_ols4_audit_report.md`` documents the full 280-ontology
+  OLS4 catalogue with curated picks; future ontology additions
+  should consult its queue.
+
+### v0.8.x — Incremental ontology adds (driven by benchmark misses)
+- Reserve for ontologies that **show up missing on real benchmark
+  output**, not preemptive. From the audit's curated queue:
+  remaining 21 candidates (MAXO, EC, MS, OMIT, HCAO, EMAPA, FBbt,
+  WBbt, ZFA, ZP, XPO, NBO, RXNO, MOD, UO, BTO, OGSF, CMPO, etc.).
+  Pick by benchmark-miss frequency, not by alphabetical / coverage
+  obsession.
+
 ### v0.7.0 — Repository metadata parsers (done)
 - ``parsers/`` subpackage with four functions:
   ``parse_geo_soft(text)``, ``parse_ena_xml(xml_text)``,

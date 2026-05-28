@@ -1,0 +1,12 @@
+# Candidates for ENVO that did not match via exact or prefix mode.
+# Either the candidate name is too informal / non-canonical
+# (e.g. an acronym not declared as a synonym in OLS4) or
+# the ontology genuinely doesn't cover this term.
+# Format: one term per line.
+
+benthic zone
+salinity
+dissolved oxygen
+host-associated environment
+anaerobic environment
+aerobic environment

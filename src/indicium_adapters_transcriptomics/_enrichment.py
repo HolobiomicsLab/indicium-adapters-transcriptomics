@@ -370,31 +370,47 @@ def _load_one_concept_tsv(filename: str) -> list[dict[str, str]]:
 
 
 def _load_concept_index_rows() -> list[dict[str, str]]:
-    """Load the static + OLS4-corpus + bio.tools + CL concept indexes.
+    """Load all bundled concept-index TSVs in priority order.
 
-    Four source TSVs are merged into the same ``ConceptIndex`` singleton:
+    Eleven sources merged into the same ``ConceptIndex`` singleton:
 
-    1. ``concept_index.tsv`` — TranscriptoKG modelling vocabulary
-       (NCIT / INO / OBI / STATO / GO concepts, v0.3.0).
-    2. ``corpus_concept_index.tsv`` — OLS4 label/synonym + prefix +
-       substring matches across the 6-paper mini-corpus
-       (EFO / OBI / NCIT / STATO platforms / protocols / stats, v0.3.1).
-    3. ``biotools_concept_index.tsv`` — bio.tools registry hits for the
-       bioinformatics software referenced in the corpus (v0.3.1).
-    4. ``cl_concept_index.tsv`` — Cell Ontology hits for the cell-type
-       vocabulary mentioned across the cell-atlas papers in the corpus
-       (Sebé-Pedrós 2018 Nematostella, Tabula Muris/Sapiens, v0.5.0).
+    1. ``concept_index.tsv`` — TranscriptoKG modelling vocab (v0.3.0).
+    2. ``corpus_concept_index.tsv`` — OLS4 corpus harvest (v0.3.1).
+    3. ``biotools_concept_index.tsv`` — bio.tools registry (v0.3.1).
+    4. ``cl_concept_index.tsv`` — Cell Ontology (v0.5.0).
+    5. ``chebi_concept_index.tsv`` — ChEBI chemicals / drugs (v0.8.0).
+    6. ``hp_concept_index.tsv`` — Human Phenotype Ontology (v0.8.0).
+    7. ``mp_concept_index.tsv`` — Mammalian Phenotype Ontology (v0.8.0).
+    8. ``doid_concept_index.tsv`` — Human Disease Ontology (v0.8.0).
+    9. ``pr_concept_index.tsv`` — Protein Ontology (v0.8.0).
+    10. ``oba_concept_index.tsv`` — Ontology of Biological Attributes
+        (v0.8.0).
+    11. ``envo_concept_index.tsv`` — Environment Ontology (v0.8.0).
 
     Load order encodes a priority: a hypothetical collision (same term
     in multiple files) resolves to the **first** occurrence — paper-
     modelling-grounded (1) > OLS4 method-mention (2) > bio.tools-
-    registry (3) > CL cell-type (4). In practice the build scripts
-    deduplicate against earlier files so collisions are unexpected.
+    registry (3) > the specialised single-ontology indexes (4-11).
+    The build scripts deduplicate against earlier files in practice,
+    so collisions are unexpected.
     """
-    rows = _load_one_concept_tsv("concept_index.tsv")
-    rows.extend(_load_one_concept_tsv("corpus_concept_index.tsv"))
-    rows.extend(_load_one_concept_tsv("biotools_concept_index.tsv"))
-    rows.extend(_load_one_concept_tsv("cl_concept_index.tsv"))
+    sources = (
+        "concept_index.tsv",
+        "corpus_concept_index.tsv",
+        "biotools_concept_index.tsv",
+        "cl_concept_index.tsv",
+        # v0.8.0 ontology-specific indexes (top-7 from the OLS4 audit).
+        "chebi_concept_index.tsv",
+        "hp_concept_index.tsv",
+        "mp_concept_index.tsv",
+        "doid_concept_index.tsv",
+        "pr_concept_index.tsv",
+        "oba_concept_index.tsv",
+        "envo_concept_index.tsv",
+    )
+    rows: list[dict[str, str]] = []
+    for filename in sources:
+        rows.extend(_load_one_concept_tsv(filename))
     return rows
 
 

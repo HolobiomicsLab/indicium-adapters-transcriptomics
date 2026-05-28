@@ -1,0 +1,8 @@
+term	curie	label	description	ontology	source
+body size	OBA:VT0100005	body size trait	The size of a multicellular organism.	OBA	v0.8.0 ontology harvest (attribute, prefix-match)
+body length	OBA:VT0001256	body length	The length of a multicellular organism.	OBA	v0.8.0 ontology harvest (attribute, exact-match)
+heart rate	OBA:1001087	heart rate	The rate of a heart contraction.	OBA	v0.8.0 ontology harvest (attribute, exact-match)
+blood pressure	OBA:VT0000183	blood pressure trait	The pressure of a blood.	OBA	v0.8.0 ontology harvest (attribute, prefix-match)
+fertility	PATO:0000274	fertility		OBA	v0.8.0 ontology harvest (attribute, exact-match)
+immune response	GO:0006955	immune response		OBA	v0.8.0 ontology harvest (attribute, exact-match)
+circadian rhythm	GO:0007623	circadian rhythm		OBA	v0.8.0 ontology harvest (attribute, exact-match)

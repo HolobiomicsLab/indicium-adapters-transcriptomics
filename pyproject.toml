@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "indicium-adapters-transcriptomics"
-version = "0.7.0"
+version = "0.8.0"
 description = "Transcriptomics-domain DomainAdapters for the indicium ecosystem"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -52,6 +52,10 @@ packages = ["src/indicium_adapters_transcriptomics"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# articles/ is a dev workbench — vocab-extraction scripts and audit
+# reports — not part of the shipped package. Exempt from the package
+# lint rules.
+extend-exclude = ["articles"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
@@ -64,6 +68,7 @@ omit = [
     "src/indicium_adapters_transcriptomics/data/build_corpus_concept_candidates.py",
     "src/indicium_adapters_transcriptomics/data/build_biotools_index.py",
     "src/indicium_adapters_transcriptomics/data/build_cl_concept_index.py",
+    "src/indicium_adapters_transcriptomics/data/build_extra_ontology_indexes.py",
     "src/indicium_adapters_transcriptomics/data/build_vocabs.py",
 ]
 

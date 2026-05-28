@@ -501,12 +501,18 @@ def test_enrich_claim_is_safe_noop_for_unknown_concept_terms():
     """When neither subject nor object resolves through any of the
     enrichment indices (gene / accession / anatomy / concept), the claim
     must pass through untouched — the concept fallback must not invent
-    a CURIE."""
+    a CURIE.
+
+    Note (v0.8.0): pre-v0.8.0 this test used ``U0126`` as the object,
+    but U0126 (the MEK inhibitor used in Warner 2025) now resolves to
+    ``CHEBI:90693`` via the new ChEBI index — which is the v0.8.0
+    feature working correctly. Both slots now need to be unresolvable
+    terms."""
     a = BulkTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "completely-bogus-term-zzz",
         "qualifier": "differentially_expressed_in",
-        "object": "U0126",
+        "object": "another-bogus-term-qqq",
     })
     assert "ontology_terms" not in out
 
@@ -591,15 +597,130 @@ def test_corpus_concept_resolution_is_end_to_end_through_enrich_claim():
     assert xref["label"] == "Illumina"
 
 
-def test_concept_index_carries_static_corpus_biotools_and_cl_rows():
-    """The quad-TSV loader must surface all four sources through the
-    same singleton — static (v0.3.0) + OLS4 corpus (v0.3.1) + bio.tools
-    (v0.3.1) + CL (v0.5.0). Lower bound only, so adding rows in any
-    file does not break the test."""
+def test_concept_index_carries_all_11_concept_sources():
+    """The quad-TSV loader of v0.5.0 expanded to **eleven** sources at
+    v0.8.0 — the original four (static / OLS4 corpus / bio.tools / CL)
+    plus seven ontology-specific indexes (CHEBI / HP / MP / DOID / PR /
+    OBA / ENVO) harvested from the OLS4 audit. Lower bound only, so
+    adding rows in any file does not break the test."""
     n = len(CONCEPT_INDEX)
-    # 31 static + 17 OLS4-corpus (+1 from v0.5.0 synonym fix)
-    # + 9 bio.tools + 35 CL = 92 minimum.
-    assert n >= 31 + 17 + 9 + 35, f"expected ≥92 concept rows, got {n}"
+    # v0.3.0 31 + v0.3.1 17 corpus + v0.3.1 9 biotools + v0.5.0 35 CL
+    # + v0.8.0: CHEBI 36 + HP 30 + MP 19 + DOID 29 + PR 18 + OBA 7
+    # + ENVO 15 = 246 rows minimum.
+    assert n >= 31 + 17 + 9 + 35 + 36 + 30 + 19 + 29 + 18 + 7 + 15, (
+        f"expected ≥246 concept rows, got {n}"
+    )
+
+
+# --- v0.8.0 ontology-specific harvested indexes -----------------------------
+
+
+def test_v080_chebi_chemicals_resolve():
+    """v0.8.0 ChEBI harvest pins. The U0126 hit is the Warner 2025
+    MEK inhibitor — this is the resolution v0.8.0 was *for*."""
+    expected = {
+        "u0126":         "CHEBI:90693",
+        "cisplatin":     "CHEBI:27899",
+        "paclitaxel":    "CHEBI:45863",
+        "estradiol":     "CHEBI:23965",
+        "wortmannin":    "CHEBI:52289",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"CHEBI term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "CHEBI"
+
+
+def test_v080_hp_human_phenotype_resolve():
+    """v0.8.0 Human Phenotype harvest pins. HPO is the standard
+    clinical phenotype vocabulary."""
+    expected = {
+        "intellectual disability": "HP:0001249",
+        "microcephaly":            "HP:0000252",
+        "seizure":                 "HP:0001250",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"HP term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "HP"
+
+
+def test_v080_mp_mouse_phenotype_resolve():
+    """v0.8.0 Mammalian Phenotype harvest pins (mouse studies)."""
+    expected = {
+        "abnormal body weight":   "MP:0001259",
+        "decreased body weight":  "MP:0001262",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"MP term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "MP"
+
+
+def test_v080_doid_disease_resolve():
+    """v0.8.0 Human Disease Ontology pins (clinical / cancer context)."""
+    expected = {
+        "cancer":         "DOID:162",
+        "breast cancer":  "DOID:1612",
+        "lung cancer":    "DOID:1324",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"DOID term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "DOID"
+
+
+def test_v080_pr_protein_resolve():
+    """v0.8.0 Protein Ontology pins. Note: PR is heavily nested —
+    generic candidate names land on specific sub-class entries via
+    synonym matching (``transcription factor`` → ``transcription
+    factor Sp``). The CURIEs are valid PR entries but not always the
+    most canonical; v0.8.x can refine candidates."""
+    expected = {
+        "alpha-synuclein":   "PR:000015322",
+        "tubulin":           "PR:000028799",
+        "ubiquitin":         "PR:000035728",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"PR term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "PR"
+
+
+def test_v080_oba_attribute_resolve():
+    """v0.8.0 Ontology of Biological Attributes pins. OBA imports
+    terms from PATO and GO; the ``curie`` may use those prefixes
+    while the ``ontology`` column reflects the harvesting source
+    (OBA) as a provenance hint."""
+    row = CONCEPT_INDEX.lookup("heart rate")
+    assert row is not None
+    assert row["curie"] == "OBA:1001087"
+    assert row["ontology"] == "OBA"
+
+    # PATO-via-OBA: harvested via the OBA index but the canonical
+    # term is in PATO.
+    row = CONCEPT_INDEX.lookup("fertility")
+    assert row is not None
+    assert row["curie"] == "PATO:0000274"
+
+
+def test_v080_envo_environment_resolve():
+    """v0.8.0 Environment Ontology pins — holobiont / sample-context."""
+    expected = {
+        "marine biome":     "ENVO:00000447",
+        "freshwater biome": "ENVO:00000873",
+        "coral reef":       "ENVO:00000150",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"ENVO term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "ENVO"
 
 
 # --- bio.tools concept index (v0.3.1) ---------------------------------------

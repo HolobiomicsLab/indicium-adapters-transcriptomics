@@ -1,5 +1,117 @@
 # Changelog
 
+## v0.8.0 — Top-7 OLS4 ontology indexes for benchmark exhaustiveness (2026-05-28)
+
+### Added — OLS4 audit + 7 high-priority ontology indexes
+
+Following an audit of the OLS4 catalogue (280 ontologies, see
+``articles/_ols4_audit_report.md``), seven high-priority ontologies
+were harvested into dedicated bundled indexes. The selection comes
+from a curated short-list of ontologies most likely to fire on a
+diverse transcriptomics corpus in the upcoming ASB benchmark phase.
+
+Harvest mechanism: same per-ontology cascade as v0.5.0 CL — curated
+candidate names → OLS4 ``exact label/synonym`` then ``prefix`` →
+re-verify by IRI lookup. Hand-curation is limited to the candidate
+name list per ontology; the matching CURIE comes from OLS4.
+
+- **CHEBI** — chemicals / drugs / ligands. **36 entries** including
+  ``U0126`` → CHEBI:90693 (the MEK inhibitor used in Warner 2025,
+  now resolvable end-to-end), ``cisplatin``, ``paclitaxel``,
+  ``estradiol``, ``dopamine``, ``ATP``, ``glucose``,
+  ``lipopolysaccharide``, etc.
+- **HP** — Human Phenotype Ontology. **30 entries** for clinical
+  transcripto vocabulary: ``intellectual disability``,
+  ``microcephaly``, ``seizure``, ``cardiomyopathy``,
+  ``hepatomegaly``, ``anemia``, etc.
+- **MP** — Mammalian Phenotype Ontology. **19 entries** for mouse
+  studies: ``abnormal body weight``, ``abnormal heart morphology``,
+  ``decreased fertility``, ``abnormal T cell physiology``, etc.
+- **DOID** — Human Disease Ontology. **29 entries** for clinical /
+  cancer transcriptomics: ``cancer``, ``breast cancer``,
+  ``lung cancer``, ``Alzheimer's disease``, ``COVID-19``,
+  ``inflammatory bowel disease``, etc.
+- **PR** — Protein Ontology. **18 entries** for protein-level
+  claims: ``alpha-synuclein``, ``tubulin``, ``myosin``,
+  ``ubiquitin``, etc. Note: PR is heavily nested and generic
+  candidate names (``transcription factor``, ``actin``) sometimes
+  land on specific sub-class entries via synonym matching —
+  the CURIEs are valid but not always the most canonical.
+- **OBA** — Ontology of Biological Attributes. **7 entries** for
+  cross-species traits: ``body size``, ``heart rate``,
+  ``blood pressure``, ``immune response``, ``circadian rhythm``.
+  Note: OBA imports terms from PATO and GO; some rows surface
+  PATO / GO CURIEs while the ``ontology`` column records OBA as
+  the harvesting source.
+- **ENVO** — Environment Ontology. **15 entries** for holobiont /
+  sample-context vocabulary: ``marine biome``, ``coral reef``,
+  ``intertidal zone``, ``sediment``, ``salinity``, etc.
+
+**Total**: 154 new CURIEs across the 7 ontologies. Concept index
+grows from ~92 rows (v0.5.0) to **~246 rows** (v0.8.0).
+
+### Added — runtime + audit artifact
+
+- Loader extended in ``_enrichment._load_concept_index_rows`` to
+  read all 7 new TSVs in priority order after the existing four
+  (static / OLS4 corpus / bio.tools / CL). The whole concept index
+  is now 11 sources merged.
+- ``data/build_extra_ontology_indexes.py`` — single REGISTRY-driven
+  harvester that handles all 7 ontologies. CLI flag ``--only <id>``
+  lets you re-harvest one ontology in isolation when its candidate
+  list grows.
+- ``articles/_ols4_ontology_audit.py`` + ``_ols4_audit_report.md``
+  — the OLS4 catalogue audit committed as a reference document.
+  ~28 curated picks plus a heuristic bucket-dump of the full
+  280-ontology catalogue. Future ontology additions should consult
+  the audit's queue.
+- ``articles/`` directory excluded from ruff (dev workbench, not
+  package).
+
+### Tests
+
+- 7 new tests in ``test_bulk.py`` pinning representative resolutions
+  per ontology — CHEBI ``U0126``, HP ``intellectual disability``,
+  MP ``abnormal body weight``, DOID ``breast cancer``, PR
+  ``alpha-synuclein``, OBA ``heart rate``, ENVO ``marine biome``.
+- ``test_concept_index_carries_all_11_concept_sources`` updates the
+  size invariant to ≥246 rows.
+- ``test_enrich_claim_is_safe_noop_for_unknown_concept_terms`` had
+  to be updated: pre-v0.8.0 it used ``U0126`` as a "supposedly
+  unresolvable" example, but v0.8.0 now resolves it via ChEBI —
+  the test pivots to two genuinely bogus terms.
+
+### Demo
+
+- Three new claims in ``examples/enrich_warner2018.py`` showing
+  end-to-end resolution through ChEBI / HP / DOID. 21/21 claims
+  enrich.
+
+### Notes on scope
+
+The OLS4 audit identified 28 high-priority candidate ontologies.
+v0.8.0 ships the top-7 absolute priority subset (CHEBI / HP / MP /
+DOID / PR / OBA / ENVO). The remaining 21 candidates are queued
+in ROADMAP — they get added incrementally as benchmark misses
+surface them, **not** preemptively. Adding an ontology after the
+fact is cheap (1-2h per ontology); adding dead weight before
+benchmark signal is wasteful. See ``project_asb_benchmark_exhaustiveness``
+in the memory bank for the principle.
+
+### Known anomalies
+
+- PR generic candidates (``transcription factor`` → PR:000000032
+  ``transcription factor Sp``; ``actin`` → ``actin (yeast)``) —
+  documented in the v0.8.0 test docstring.
+- CHEBI ``hydrocortisone`` resolves to CHEBI:135746
+  ``hydrocortisone aceponate`` (the ester) because the OLS4 search
+  ranks the synonym match before the bare ``hydrocortisone`` term.
+- OBA ``fertility`` resolves to PATO:0000274 because OBA imports
+  PATO terms.
+
+These are all documented in the per-ontology unresolved logs
+(``<onto>_unresolved.txt``) and the v0.8.x roadmap.
+
 ## v0.7.0 — Repository metadata parsers (2026-05-28)
 
 ### Added — `parsers/` subpackage

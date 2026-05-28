@@ -119,6 +119,25 @@ CLAIMS: Final[list[ClaimSpec]] = [
          "object": "intestine", "species": "mouse"},
         "v0.6.0 species hint: explicit override even when symbol is UPPERCASE",
     ),
+    # --- v0.8.0: ChEBI / HP / DOID via per-ontology harvested indexes -----
+    (
+        "bulk",
+        {"subject": "study_warner_2025", "qualifier": "tested_with",
+         "object": "U0126"},
+        "v0.8.0 ChEBI: U0126 (Warner's MEK inhibitor) → CHEBI:90693",
+    ),
+    (
+        "bulk",
+        {"subject": "patient_42", "qualifier": "expressed_in",
+         "object": "intellectual disability"},
+        "v0.8.0 HP: a clinical phenotype → HP:0001249 (forces species=human)",
+    ),
+    (
+        "bulk",
+        {"subject": "tumor_sample_7", "qualifier": "consolidates_dataset",
+         "object": "breast cancer"},
+        "v0.8.0 DOID: a disease label → DOID:1612 (cancer subtype)",
+    ),
     # --- v0.6.2: Drosophila / C. elegans / Zebrafish -----------------------
     (
         "bulk",
