@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.4.0 ships two sibling adapters:
+v0.5.0 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -20,8 +20,8 @@ v0.4.0 ships two sibling adapters:
   Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
   enrichment via the Cell Ontology (CL) is on the v0.2.1 roadmap.
 
-Both adapters also share a **concept index** (v0.3.0 + v0.3.1) — 56
-verified CURIEs across three sources:
+Both adapters also share a **concept index** (v0.3.0 → v0.5.0) — 92+
+verified CURIEs across four sources:
 
 - **Static (v0.3.0, 31 rows)** — drawn from the TranscriptoKG modelling
   vocabulary: INO regulation processes, NCIT analysis concepts, GO
@@ -44,6 +44,14 @@ verified CURIEs across three sources:
   bioinformatics software: `STAR`, `Bowtie`, `Bowtie2` (matched via
   whitespace normalisation against bio.tools name "Bowtie 2"),
   `Minimap2`, `RSEM`, `StringTie`, `DESeq2`, `Seurat`, `Picard`.
+- **Cell Ontology (v0.5.0, 35 rows)** — harvested from the cell-atlas
+  papers in the corpus: `cnidocyte` (CL:0011029 — the Nematostella
+  iconic cell type), `T cell` / `B cell` / `macrophage` / `monocyte` /
+  `neutrophil` / `astrocyte` / `oligodendrocyte` / `fibroblast` /
+  `endothelial cell` / `hepatocyte` / `enterocyte` / `goblet cell`
+  and 23 more. Powers single-cell qualifiers
+  (`marker_of_cell_type`, `enriched_in_cluster`,
+  `co_expressed_in_cell_type`) end-to-end.
 
 **v0.4.0 — qualifier-aware resolution priority.** `enrich_claim()`
 picks its resolver chain based on the claim's qualifier:

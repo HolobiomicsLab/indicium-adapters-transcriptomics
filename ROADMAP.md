@@ -98,6 +98,22 @@ new benchmark papers reveal the need.
   corpus (v0.3.1) → bio.tools (v0.3.1). Collision rule: first match
   wins, encoding a "grounding priority" ladder.
 
+### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
+- `data/build_cl_concept_index.py` harvests CL for the cell-type
+  vocabulary mentioned across the cell-atlas papers in the mini-corpus
+  (Sebé-Pedrós 2018 Nematostella, Tabula Muris/Sapiens). 35/37
+  candidates resolved (~95%), incl. `cnidocyte` → CL:0011029.
+- Single-cell `marker_of_cell_type` / `enriched_in_cluster` /
+  `co_expressed_in_cell_type` qualifiers now resolve their cell-type
+  objects via CL.
+- OLS4 cascade: label-first pass in exact mode (fixes the
+  macrophage → plasmatocyte ranking quirk) + fix
+  `exact_synonyms` field name on search docs (was silently dead).
+- v0.3.1 corpus re-built with the fixes: 16 → 17 hits, plus
+  canonicalised mappings for `pacbio` (→ SMRT Sequencing),
+  `oxford nanopore` (→ Nanopore Sequencing), `bulk rna-seq` (→ Bulk
+  RNA Sequencing).
+
 ### v0.4.0 — qualifier-aware resolution + symmetric single-cell refactor (done)
 - `BulkTranscriptomicsAdapter.enrich_claim()` picks its resolver chain
   based on the claim's qualifier:

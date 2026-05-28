@@ -234,20 +234,48 @@ def _try_match_in_docs(
     docs: list[dict], term: str, mode: MatchMode
 ) -> dict | None:
     """Walk the OLS4 result docs in returned order; return the first doc
-    that satisfies the requested match mode."""
+    that satisfies the requested match mode.
+
+    For ``exact`` mode the matcher does a two-pass over the docs:
+    label-exact first, synonym-exact second. This protects against an
+    OLS4 ranking quirk: e.g. searching ``macrophage`` against CL returns
+    CL:0000394 (plasmatocyte, which lists macrophage as a synonym) ahead
+    of CL:0000235 (whose label *is* ``macrophage``). The canonical entry
+    must win even if OLS4's relevance score puts it second."""
     target = term.strip().lower()
-    for d in docs:
-        label = (d.get("label") or "").strip()
-        if mode == "exact":
-            synonyms = [s.strip() for s in (d.get("synonym") or [])]
-            if label.lower() == target or any(s.lower() == target for s in synonyms):
+    if mode == "exact":
+        # Pass 1: label-exact.
+        for d in docs:
+            label = (d.get("label") or "").strip()
+            if label.lower() == target:
                 return d
-        elif mode == "prefix":
+        # Pass 2: synonym-exact. The OLS4 *search* endpoint exposes
+        # synonyms under ``exact_synonyms`` (not the term endpoint's
+        # ``synonym`` field); be defensive and check both, since some
+        # documents may expose ``synonyms`` instead.
+        for d in docs:
+            synonyms: list[str] = []
+            for key in ("exact_synonyms", "synonym", "synonyms"):
+                val = d.get(key)
+                if isinstance(val, list):
+                    synonyms.extend(s.strip() for s in val if isinstance(s, str))
+                elif isinstance(val, str):
+                    synonyms.append(val.strip())
+            if any(s.lower() == target for s in synonyms):
+                return d
+        return None
+    if mode == "prefix":
+        for d in docs:
+            label = (d.get("label") or "").strip()
             if _prefix_match(term, label):
                 return d
-        elif mode == "substring":
+        return None
+    if mode == "substring":
+        for d in docs:
+            label = (d.get("label") or "").strip()
             if _substring_match(term, label):
                 return d
+        return None
     return None
 
 

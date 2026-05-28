@@ -2,7 +2,6 @@
 # Candidates for bio.tools integration, upstream ontology contribution, or alias-table curation in a later release.
 # Format: <axis>\t<term>
 
-protocol	10x Genomics
 protocol	Iso-Seq
 protocol	ONT direct RNA
 aligner_quant	STAR

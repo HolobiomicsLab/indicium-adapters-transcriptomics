@@ -154,10 +154,12 @@ def test_enrich_claim_resolves_both_subject_and_object_slots():
 
 
 def test_singlecell_resolves_gene_subject_for_marker_of_cell_type():
-    """v0.4.0: single-cell now wires the shared gene resolver. A claim
-    like ``marker_of_cell_type: WNT4 cnidocyte`` resolves ``WNT4`` to
-    its HGNC CURIE — pre-v0.4.0 it was unenriched because single-cell
-    only had anatomy + concept resolvers."""
+    """v0.4.0 wired the shared gene resolver into single-cell; v0.5.0
+    added CL cell-type resolution. A claim like
+    ``marker_of_cell_type: WNT4 cnidocyte`` now resolves BOTH slots —
+    WNT4 to HGNC:12783 and cnidocyte to CL:0011029 (the cnidarian-
+    specific cell-type CURIE; CL has cnidocyte even though UBERON has
+    no cnidarian anatomy)."""
     a = SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "WNT4",
@@ -167,8 +169,51 @@ def test_singlecell_resolves_gene_subject_for_marker_of_cell_type():
     assert out["ontology_terms"]["subject"] == "HGNC:12783"
     xrefs = out["xrefs"]["subject"]
     assert xrefs.get("hgnc") == "HGNC:12783"
-    # cnidocyte is a Nematostella-specific cell type; no CL CURIE yet (v0.5.0).
-    assert "object" not in out.get("ontology_terms", {})
+    # v0.5.0: CL now resolves cnidocyte.
+    assert out["ontology_terms"]["object"] == "CL:0011029"
+
+
+def test_cl_cell_types_resolve_via_concept_index():
+    """v0.5.0 ships a Cell Ontology (CL) index harvested from the
+    cell-atlas papers in the mini-corpus (Sebé-Pedrós 2018 Nematostella,
+    Tabula Muris, Tabula Sapiens). Pin the canonical resolutions so a
+    CL re-harvest or a label-first cascade regression breaks the test
+    immediately.
+
+    Note: ``macrophage`` is included deliberately because pre-v0.5.0
+    it would have resolved (via the OLS4 ranking quirk) to CL:0000394
+    plasmatocyte — which has ``macrophage`` only as a synonym, not as
+    its label. The v0.5.0 label-first cascade refinement makes
+    CL:0000235 (whose label *is* macrophage) win as it should.
+    """
+    from indicium_adapters_transcriptomics._enrichment import CONCEPT_INDEX
+
+    expected = {
+        # Nematostella-specific cell type — CL has it even though UBERON
+        # has no cnidarian anatomy.
+        "cnidocyte":         "CL:0011029",
+        # Mammalian immune system — canonical, label-exact matches.
+        "t cell":            "CL:0000084",
+        "b cell":            "CL:0000236",
+        "macrophage":        "CL:0000235",  # NOT CL:0000394 plasmatocyte (synonym trap)
+        "neutrophil":        "CL:0000775",
+        "monocyte":          "CL:0000576",
+        # Mammalian nervous system.
+        "astrocyte":         "CL:0000127",
+        "oligodendrocyte":   "CL:0000128",
+        # Mammalian connective / epithelial.
+        "fibroblast":        "CL:0000057",
+        "endothelial cell":  "CL:0000115",
+        "hepatocyte":        "CL:0000182",
+        "goblet cell":       "CL:0000160",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"CL term {term!r} should resolve"
+        assert row["curie"] == curie, (
+            f"{term!r}: expected {curie}, got {row['curie']}"
+        )
+        assert row["ontology"] == "CL"
 
 
 def test_singlecell_gene_resolver_does_not_override_anatomy():

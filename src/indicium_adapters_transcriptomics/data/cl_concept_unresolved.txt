@@ -1,0 +1,6 @@
+# Cell-type candidates with no exact/prefix match in CL.
+# Each line: <term>\t<source hint>.
+# Candidates for hand-mapping, upstream CL contribution,
+# or alternative ontology (e.g. BTO for cell lines).
+
+gland cell	Sebé-Pedrós 2018 (Nematostella secretory)

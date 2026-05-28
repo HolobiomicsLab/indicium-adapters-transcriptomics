@@ -111,7 +111,7 @@ CLAIMS: Final[list[ClaimSpec]] = [
         "singlecell",
         {"subject": "WNT4", "qualifier": "marker_of_cell_type",
          "object": "cnidocyte"},
-        "v0.4.0 single-cell: gene subject (new); cnidocyte (cell type) unresolved — CL roadmap",
+        "v0.5.0 single-cell: gene subject + CL cell type — both slots fully resolved",
     ),
     # --- Single-cell: deliberately unenriched ------------------------------
     (
@@ -179,7 +179,7 @@ def main() -> int:
                 else:
                     print(f"          xrefs[{slot}] : {principal}")
         else:
-            print(f"    OUT : (no resolution — slot values pass through)")
+            print("    OUT : (no resolution — slot values pass through)")
         print(f"    new keys on output dict: {new_keys}")
 
     print()

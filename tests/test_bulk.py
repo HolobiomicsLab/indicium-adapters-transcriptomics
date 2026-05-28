@@ -298,24 +298,43 @@ def test_enrich_claim_is_safe_noop_for_unknown_concept_terms():
 
 def test_corpus_concept_terms_resolve_via_concept_index():
     """v0.3.1 ships a corpus-driven concept index harvested from the
-    6-paper mini-corpus. 16 terms resolved via OLS4 across three match
+    6-paper mini-corpus. 17 terms resolved via OLS4 across three match
     modes (exact / prefix / substring). Pin each one so a regression
     in either the harvester or the dual-TSV loader is caught
-    immediately."""
+    immediately.
+
+    v0.5.0 also fixed an OLS4-API field-name bug: the search endpoint
+    exposes synonyms under ``exact_synonyms`` rather than ``synonym``.
+    Several v0.3.1 resolutions silently fell through to prefix or
+    substring matching before the fix; with the fix those terms now
+    take the more canonical synonym-exact match instead. The pins
+    below reflect the v0.5.0 (corrected) results:
+
+    - ``pacbio`` → NCIT:C146819 SMRT Sequencing (the technology,
+      previously EFO:0920006 PacBio Revio via prefix).
+    - ``oxford nanopore`` → NCIT:C146818 Nanopore Sequencing
+      (previously OBI:0002750 ONT MinION via prefix).
+    - ``bulk rna-seq`` → NCIT:C219552 Bulk RNA Sequencing
+      (previously OBI:0003090 bulk RNA-seq assay via prefix).
+    - ``10x genomics`` → EFO:0008995 10x technology (new resolution;
+      unresolved in v0.3.1 because the prefix-match required the
+      label to start with "10x Genomics" but EFO uses "10x" alone).
+    """
     expected = {
         # term              (curie,           ontology, axis,         mode)
         # --- exact-match (label or synonym == corpus term) ---
         "illumina":         ("NCIT:C215820",  "NCIT",   "platform",   "exact"),
+        "pacbio":           ("NCIT:C146819",  "NCIT",   "platform",   "exact"),
+        "oxford nanopore":  ("NCIT:C146818",  "NCIT",   "platform",   "exact"),
         "mars-seq":         ("EFO:0008796",   "EFO",    "protocol",   "exact"),
         "smart-seq2":       ("EFO:0008931",   "EFO",    "protocol",   "exact"),
         "drop-seq":         ("EFO:0008722",   "EFO",    "protocol",   "exact"),
         "slide-seq":        ("EFO:0009920",   "EFO",    "protocol",   "exact"),
+        "bulk rna-seq":     ("NCIT:C219552",  "NCIT",   "protocol",   "exact"),
+        "10x genomics":     ("EFO:0008995",   "EFO",    "protocol",   "exact"),
+        "visium":           ("EFO:0010961",   "EFO",    "protocol",   "exact"),
         "t-test":           ("NCIT:C53231",   "NCIT",   "stat_test",  "exact"),
         # --- prefix-match (corpus term = whole-word prefix of label) ---
-        "pacbio":           ("EFO:0920006",   "EFO",    "platform",   "prefix"),
-        "oxford nanopore":  ("OBI:0002750",   "OBI",    "platform",   "prefix"),
-        "bulk rna-seq":     ("OBI:0003090",   "OBI",    "protocol",   "prefix"),
-        "visium":           ("EFO:0010961",   "EFO",    "protocol",   "prefix"),
         "wilcoxon":         ("NCIT:C53246",   "NCIT",   "stat_test",  "prefix"),
         "benjamini-hochberg": ("NCIT:C61596", "NCIT",   "stat_test",  "prefix"),
         # --- substring-match (corpus term = whole-word substring of label;
@@ -354,14 +373,15 @@ def test_corpus_concept_resolution_is_end_to_end_through_enrich_claim():
     assert xref["label"] == "Illumina"
 
 
-def test_concept_index_carries_static_corpus_and_biotools_rows():
-    """The triple-TSV loader must surface all three sources through the
+def test_concept_index_carries_static_corpus_biotools_and_cl_rows():
+    """The quad-TSV loader must surface all four sources through the
     same singleton — static (v0.3.0) + OLS4 corpus (v0.3.1) + bio.tools
-    (v0.3.1). Lower bound only, so adding rows in any file does not
-    break the test."""
+    (v0.3.1) + CL (v0.5.0). Lower bound only, so adding rows in any
+    file does not break the test."""
     n = len(CONCEPT_INDEX)
-    # 31 static + 16 OLS4-corpus + 9 bio.tools = 56 minimum.
-    assert n >= 31 + 16 + 9, f"expected ≥56 concept rows, got {n}"
+    # 31 static + 17 OLS4-corpus (+1 from v0.5.0 synonym fix)
+    # + 9 bio.tools + 35 CL = 92 minimum.
+    assert n >= 31 + 17 + 9 + 35, f"expected ≥92 concept rows, got {n}"
 
 
 # --- bio.tools concept index (v0.3.1) ---------------------------------------

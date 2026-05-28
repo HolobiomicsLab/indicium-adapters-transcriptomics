@@ -1,5 +1,97 @@
 # Changelog
 
+## v0.5.0 — Cell Ontology enrichment + OLS4 cascade refinements (2026-05-28)
+
+### Added — Cell Ontology (CL) harvest
+
+- `data/build_cl_concept_index.py` maintainer script that resolves a
+  curated list of 37 cell-type candidate names against the **Cell
+  Ontology** via OLS4 search with the same cascade match modes used
+  for the corpus harvest (exact label → exact synonym → prefix).
+  Substring mode is omitted to avoid false positives — cell-type
+  labels in CL are already minimal.
+- Candidate list drawn from the three cell-atlas papers in the
+  6-paper mini-corpus: **Sebé-Pedrós 2018** (*Nematostella vectensis*
+  whole-organism cell atlas), **Tabula Muris 2018** (mouse), and
+  **Tabula Sapiens 2022** (human). Plus canonical mammalian immune /
+  nervous / epithelial cell types that recur in any transcriptomics
+  study.
+- Bundled `data/cl_concept_index.tsv` — **35 verified entries**
+  (~95% yield), including: `cnidocyte` (CL:0011029, the cnidarian-
+  specific cell type — CL covers it even though UBERON has no
+  cnidarian anatomy), `T cell` / `B cell` / `macrophage` / `neutrophil`
+  / `monocyte` (mammalian immune), `astrocyte` / `oligodendrocyte`
+  (CNS), `fibroblast` / `endothelial cell` / `hepatocyte` (epithelial /
+  connective), `enterocyte` / `goblet cell` / `Paneth cell` (GI), etc.
+- `data/cl_concept_unresolved.txt` — 2 unresolved candidates
+  (`gland cell`, `nematocyte` — the latter deduped against `cnidocyte`
+  since both map to CL:0011029).
+- Loader now reads four TSVs: static + OLS4 corpus + bio.tools + CL.
+  Same priority ladder (first match wins) with CL placed last.
+
+### Changed — OLS4 cascade matcher fixes
+
+- **Label-first cascade pass in exact mode.** Previously the exact
+  matcher returned the first OLS4 result whose label OR synonym
+  matched the corpus term. OLS4's relevance ranking sometimes puts a
+  synonym-match doc ahead of the label-match doc — e.g. searching
+  ``macrophage`` against CL returns CL:0000394 plasmatocyte (which
+  has macrophage as a synonym) before CL:0000235 macrophage (whose
+  label *is* macrophage). The v0.5.0 cascade does label-exact across
+  all docs first, then synonym-exact second; the canonical label-
+  match wins.
+- **Fix OLS4 search-endpoint synonym field name.** Search docs expose
+  synonyms under ``exact_synonyms``, not ``synonym`` (the latter is
+  used by the term-by-IRI endpoint). Pre-v0.5.0 the synonym pass was
+  silently dead because the code looked at the wrong field; resolutions
+  that should have used synonym matching fell through to prefix /
+  substring matching instead. The fix is defensive — both
+  ``exact_synonyms`` and ``synonym`` are now consulted.
+- Net effect on the v0.3.1 corpus index (re-built with the fixes):
+  one new resolution (``10x Genomics`` → ``EFO:0008995`` 10x technology)
+  plus three canonicalisations:
+  - ``pacbio`` from ``EFO:0920006`` PacBio Revio → ``NCIT:C146819``
+    **SMRT Sequencing** (the technology, not a specific model).
+  - ``oxford nanopore`` from ``OBI:0002750`` ONT MinION →
+    ``NCIT:C146818`` **Nanopore Sequencing**.
+  - ``bulk rna-seq`` from ``OBI:0003090`` bulk RNA-seq assay →
+    ``NCIT:C219552`` **Bulk RNA Sequencing**.
+  All three new mappings are semantically more canonical — the
+  corpus term is the technology, not a specific instrument / assay
+  realisation. Pinned tests updated accordingly. Corpus yield rises
+  from 16 → 17 / 38 (~45%).
+
+### Added — tests
+
+- `test_cl_cell_types_resolve_via_concept_index` pins 12 CL
+  resolutions including the macrophage-not-plasmatocyte assertion
+  (proves the label-first refinement is in effect end-to-end).
+- v0.4.0 test `test_singlecell_resolves_gene_subject_for_marker_of_cell_type`
+  updated: pre-v0.5.0 it asserted ``cnidocyte`` stayed unenriched
+  (CL not wired); v0.5.0 asserts the object slot resolves to
+  ``CL:0011029``. The test now exercises both slots of the
+  ``marker_of_cell_type`` qualifier — gene subject + CL object.
+- `test_corpus_concept_terms_resolve_via_concept_index` updated for
+  the v0.5.0 canonicalised mappings (pacbio / oxford nanopore /
+  bulk rna-seq) plus the new ``10x genomics`` resolution. Pins the
+  match-mode tag in the source column.
+- Size invariant now ≥92 rows (was ≥56): 31 static + 17 OLS4-corpus
+  + 9 bio.tools + 35 CL.
+
+### Notes
+
+- Single-cell now has **two-slot resolution** for all five of its
+  cell-resolution qualifiers — both the gene subject (v0.4.0 wiring)
+  and the cell-type object (v0.5.0 wiring) get CURIEs. The
+  `marker_of_cell_type` qualifier is now fully expressive.
+- The 24 corpus terms unresolved at v0.3.1 → 21 at v0.5.0. The four
+  changes: +1 new (`10x Genomics`), the three canonicalisations don't
+  change the unresolved count (they were already resolved, just to
+  a different CURIE).
+- Demo `examples/enrich_warner2018.py` updated to reflect the new
+  v0.5.0 behaviour on claim 11 (cnidocyte resolves to CL:0011029
+  instead of staying bare).
+
 ## v0.4.0 — qualifier-aware resolution priority (2026-05-27)
 
 ### Changed

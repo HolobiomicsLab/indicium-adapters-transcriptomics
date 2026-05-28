@@ -176,29 +176,31 @@ def _load_one_concept_tsv(filename: str) -> list[dict[str, str]]:
 
 
 def _load_concept_index_rows() -> list[dict[str, str]]:
-    """Load the static + OLS4-corpus + bio.tools concept indexes, in that order.
+    """Load the static + OLS4-corpus + bio.tools + CL concept indexes.
 
-    Three source TSVs are merged into the same ``ConceptIndex`` singleton:
+    Four source TSVs are merged into the same ``ConceptIndex`` singleton:
 
     1. ``concept_index.tsv`` — TranscriptoKG modelling vocabulary
        (NCIT / INO / OBI / STATO / GO concepts, v0.3.0).
-    2. ``corpus_concept_index.tsv`` — OLS4 label-search hits across the
-       6-paper mini-corpus (EFO platforms / protocols, NCIT analysis
-       concepts, v0.3.1).
+    2. ``corpus_concept_index.tsv`` — OLS4 label/synonym + prefix +
+       substring matches across the 6-paper mini-corpus
+       (EFO / OBI / NCIT / STATO platforms / protocols / stats, v0.3.1).
     3. ``biotools_concept_index.tsv`` — bio.tools registry hits for the
-       bioinformatics software referenced in the corpus (STAR, Seurat,
-       DESeq2 …, v0.3.1).
+       bioinformatics software referenced in the corpus (v0.3.1).
+    4. ``cl_concept_index.tsv`` — Cell Ontology hits for the cell-type
+       vocabulary mentioned across the cell-atlas papers in the corpus
+       (Sebé-Pedrós 2018 Nematostella, Tabula Muris/Sapiens, v0.5.0).
 
-    The load order encodes a priority: a hypothetical collision (same
-    term appearing in multiple files) resolves to the **first**
-    occurrence — paper-modelling-grounded (1) wins over OLS4
-    method-mention (2) wins over bio.tools-registry (3). In practice
-    the build scripts deduplicate against earlier files so collisions
-    are unexpected.
+    Load order encodes a priority: a hypothetical collision (same term
+    in multiple files) resolves to the **first** occurrence — paper-
+    modelling-grounded (1) > OLS4 method-mention (2) > bio.tools-
+    registry (3) > CL cell-type (4). In practice the build scripts
+    deduplicate against earlier files so collisions are unexpected.
     """
     rows = _load_one_concept_tsv("concept_index.tsv")
     rows.extend(_load_one_concept_tsv("corpus_concept_index.tsv"))
     rows.extend(_load_one_concept_tsv("biotools_concept_index.tsv"))
+    rows.extend(_load_one_concept_tsv("cl_concept_index.tsv"))
     return rows
 
 
