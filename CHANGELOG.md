@@ -1,5 +1,116 @@
 # Changelog
 
+## v0.9.0 — Broader ontology coverage for benchmark consistency (2026-05-28)
+
+Following Dina's call to "do it properly" before the upcoming ASB
+benchmark phase, v0.9.0 extends the v0.8.0 audit-driven set with
+**Tier-1 universal** (vocabularies that fire on almost any transcripto
+paper) and **Tier-2 organism-paired** (per-species anatomy / phenotype
+that complete the v0.6.x gene-index coverage). Tier-3 niche stays
+deferred.
+
+### Added — Tier-1 universal indexes
+
+- **MS** (Mass Spectrometry Ontology, PSI-MS) — **21 entries**
+  covering ionisation methods (electrospray, MALDI, APCI),
+  mass analysers (quadrupole, time-of-flight, orbitrap, FT-ICR),
+  combined methods (GC-MS), acquisition modes (DDA / DIA / SRM),
+  sample-prep terms (trypsin, in-gel digestion). Important for the
+  proteomics overlap with the metabolomics adapter.
+- **UO** (Units of measurement Ontology) — **35 entries**
+  covering mass (g/kg/mg/µg/ng/pg), volume (l/ml/µl/nl),
+  concentration (molar / millimolar / micromolar / nanomolar / picomolar),
+  time, temperature, counts, length. Essential for normalising
+  quantitative claims.
+- **MOD** (Protein Modifications, PSI-MOD) — **19 entries** after
+  candidate-list refinement. PSI-MOD uses ``<verb-form> residue`` /
+  ``<verb-form> L-<aa>`` patterns rather than the ``-ation`` PTM-
+  class names common in literature; candidates aligned with that
+  convention catch ``phosphorylated residue``, ``acetylated residue``,
+  ``methylated residue``, ``ubiquitinated residue``, ``glycosylated
+  residue``, ``palmitoylated residue``, ``myristoylated residue``,
+  ``farnesylated residue``, etc.
+
+### Added — Tier-2 organism-paired anatomy / phenotype
+
+Each ontology completes the per-species v0.6.x gene index. Single-
+species papers get end-to-end resolution (organism gene + organism
+anatomy + organism phenotype) without falling back to UBERON for
+non-mammalian anatomy.
+
+- **FBbt** (Drosophila anatomy) — **34 entries**. Pairs with v0.6.2
+  FlyBase gene index. Covers imaginal discs (wing / eye / leg /
+  antennal), adult organ systems (ovary / testis / brain / ventral
+  nerve cord / gut), life stages, muscle, fat body.
+- **WBbt** (C. elegans anatomy) — **21 entries**. Pairs with v0.6.2
+  WormBase gene index. Covers reproductive system (germ line, gonad,
+  spermatheca), digestive (pharynx, intestine), nervous (neuron
+  types, nerve ring), muscle (body wall, pharyngeal).
+- **ZFA** (Zebrafish anatomy) — **34 entries**. Pairs with v0.6.2
+  ZFIN gene index. Covers early-development structures (somite,
+  notochord, neural tube), adult organs (heart, brain, retina,
+  liver, swim bladder), fins (pectoral, pelvic, dorsal, caudal),
+  pharyngeal arches. Note: life-stage candidates resolve via the
+  imported **ZFS** zebrafish-stage namespace.
+- **EMAPA** (Mouse Developmental Anatomy) — **28 entries**. Pairs
+  with v0.6.0 MGI gene index. Covers embryo / fetal / neonate /
+  adult life stages, somite / neural-tube / neural-crest, limb-bud
+  development, brain regions, organ primordia, placenta / yolk-sac.
+- **XPO** (Xenopus Phenotype) — **9 entries**. Regeneration /
+  morphology phenotypes for the canonical regeneration model.
+
+**Total new in v0.9.0**: **201 CURIEs across 8 ontologies**.
+Concept index grows from ~246 rows (v0.8.0) to **~447 rows** loaded
+from 19 source TSVs.
+
+### Deferred to v0.9.x (poor OLS4 fit)
+
+Four ontologies in the v0.8.0 audit shortlist had yields too low to
+ship at v0.9.0 quality bar. Each is annotated in
+``build_extra_ontology_indexes.py`` with the per-ontology rationale
+and will need a dedicated harvester or a different source:
+
+- **EC** (Enzyme Commission, ~13k terms in OLS4) — re-exports GO
+  molecular-function terms without human-readable labels. 3 / 30
+  yield. Defer until we wire ExPASy enzyme.dat directly.
+- **RXNO** (Reaction Ontology) — mostly CHEBI / BFO imports without
+  named reaction labels. 2 / 16. Defer.
+- **HCAO** (Human Cell Atlas Ontology) — re-publishes CARO / CL /
+  CLO / GO terms; redundant with our existing v0.5.0 CL index.
+  0 / 17. Defer.
+- **ZP** (Zebrafish Phenotype) — labels follow a peculiar
+  ``<entity> abnormal, abnormal`` pattern that doesn't match the
+  natural-language ``abnormal <entity>`` form. 1 / 16. Refactor
+  the harvester to flip word order before re-attempting.
+
+### Changed — runtime + harvester
+
+- ``_load_one_concept_tsv`` is now **tolerant of missing files**:
+  returns ``[]`` rather than raising ``FileNotFoundError`` when a
+  bundled TSV is absent. Still strict on malformed headers
+  (raises). This lets the package import cleanly during maintainer
+  build steps that re-generate a subset of TSVs sequentially. Fix
+  for a real bug that surfaced during the v0.9.0 harvest sequence.
+- ``build_extra_ontology_indexes.REGISTRY`` extended with 8 new
+  entries (3 Tier-1 + 5 Tier-2). The 4 deferred ontologies are
+  commented out in-place with their rationale, so a future
+  harvester author can see what was tried.
+
+### Tests
+
+- 8 new pinned tests, one per new ontology. Includes a regression
+  guard for the somite collision between EMAPA and ZFA (the loader's
+  priority ladder puts mouse EMAPA first, so a bare ``somite``
+  resolves via EMAPA; ZFA-specific tests use ZFA-unique terms).
+- Size invariant updated to ≥447 rows across 19 source TSVs.
+
+### Demo
+
+- 4 new claims in ``examples/enrich_warner2018.py`` showing the
+  cross-axis multi-ontology coverage (EMAPA limb bud, FBbt wing
+  disc, MS orbitrap, PSI-MOD phosphorylated residue). 25/25 claims
+  enrich.
+
 ## v0.8.0 — Top-7 OLS4 ontology indexes for benchmark exhaustiveness (2026-05-28)
 
 ### Added — OLS4 audit + 7 high-priority ontology indexes

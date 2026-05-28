@@ -202,7 +202,263 @@ ENVO_CANDIDATES: tuple[str, ...] = (
 )
 
 
+# --- v0.9.0 Tier-1 universal: MS / EC / UO / MOD / RXNO / HCAO ------------
+
+
+MS_CANDIDATES: tuple[str, ...] = (
+    # Ionisation
+    "electrospray ionization", "matrix-assisted laser desorption ionization",
+    "chemical ionization", "atmospheric pressure chemical ionization",
+    "fast atom bombardment",
+    # Mass analysers
+    "quadrupole", "time-of-flight", "ion trap", "orbitrap",
+    "fourier transform ion cyclotron resonance",
+    # Common combined methods (LC-MS, GC-MS spelt out)
+    "liquid chromatography mass spectrometry",
+    "gas chromatography mass spectrometry",
+    "tandem mass spectrometry",
+    # Quantification
+    "label-free quantification", "isobaric tag for relative and absolute quantification",
+    "stable isotope labeling by amino acids in cell culture",
+    "tandem mass tag",
+    # Acquisition modes
+    "data-dependent acquisition", "data-independent acquisition",
+    "selected reaction monitoring", "multiple reaction monitoring",
+    # Concepts
+    "mass-to-charge ratio", "precursor ion", "product ion",
+    "fragment ion spectrum", "monoisotopic mass",
+    # Sample prep
+    "trypsin", "in-gel digestion", "in-solution digestion",
+)
+
+
+# EC_CANDIDATES kept here for reference but EC is deferred — see the
+# REGISTRY comment. The OLS4 ``ec`` ontology re-exports GO molecular-
+# function terms without human-readable labels, so cascade label-
+# matching can't catch common enzyme class names. v0.9.x will land
+# EC via a direct EC-number mapping file from ExPASy.
+_EC_CANDIDATES_DEFERRED: tuple[str, ...] = (
+    "oxidoreductase", "transferase", "hydrolase",
+    "lyase", "isomerase", "ligase", "translocase",
+    "kinase", "phosphatase", "protease", "peptidase",
+    "nuclease", "polymerase", "helicase",
+    "DNA polymerase", "RNA polymerase",
+    "DNA helicase", "DNA ligase",
+    "reverse transcriptase", "topoisomerase",
+    "transposase", "integrase", "recombinase",
+    "dehydrogenase", "oxidase", "reductase",
+    "methyltransferase", "acetyltransferase",
+)
+
+
+UO_CANDIDATES: tuple[str, ...] = (
+    # Mass units
+    "gram", "kilogram", "milligram", "microgram", "nanogram", "picogram",
+    # Volume units
+    "liter", "milliliter", "microliter", "nanoliter",
+    # Concentration units (molar) — note: 'molar' might be ambiguous;
+    # try the full canonical names
+    "molar", "millimolar", "micromolar", "nanomolar", "picomolar",
+    "mole", "millimole", "micromole",
+    # Time
+    "second", "minute", "hour", "day", "week", "month", "year",
+    # Temperature
+    "degree Celsius", "kelvin",
+    # Counting / cellular units
+    "molecule", "cell", "particle",
+    # Length
+    "meter", "centimeter", "millimeter", "micrometer", "nanometer",
+    # Generic
+    "percent", "fold change",
+)
+
+
+MOD_CANDIDATES: tuple[str, ...] = (
+    # PSI-MOD uses "<verb-form> residue" / "<verb-form> L-<aa>" patterns
+    # rather than the PTM-class names common in literature
+    # ("phosphorylation"). Candidates aligned with that convention.
+    # Class-level "residue" entries
+    "phosphorylated residue", "acetylated residue",
+    "methylated residue", "ubiquitinated residue",
+    "sumoylated residue", "neddylated residue",
+    "glycosylated residue", "N-glycosylated residue",
+    "O-glycosylated residue",
+    "palmitoylated residue", "myristoylated residue",
+    "prenylated residue", "farnesylated residue",
+    "geranylgeranylated residue",
+    # Specific phospho / methyl / acetyl positions
+    "phosphorylated L-serine", "phosphorylated L-threonine",
+    "phosphorylated L-tyrosine", "phosphorylated L-histidine",
+    "O-phosphorylated residue", "N-phosphorylated residue",
+    "monomethylated L-lysine", "dimethylated L-lysine",
+    "trimethylated L-lysine",
+    "N6-acetyl-L-lysine",
+    # Other common modifications
+    "oxidized residue", "deamidated residue",
+    "citrullinated residue", "nitrosylated residue",
+    "protein modification",
+)
+
+
+RXNO_CANDIDATES: tuple[str, ...] = (
+    # Generic reaction types
+    "chemical reaction", "biochemical reaction",
+    "oxidation reaction", "reduction reaction",
+    "hydrolysis reaction", "condensation reaction",
+    "phosphorylation reaction", "dephosphorylation reaction",
+    "methylation reaction", "acetylation reaction",
+    "ubiquitination reaction",
+    # Biosynthesis / catabolism (might match as classes)
+    "biosynthesis", "catabolism", "anabolism",
+    # Common enzymatic reactions
+    "transamination", "decarboxylation",
+    # Pathway-adjacent
+    "redox reaction", "esterification",
+)
+
+
+HCAO_CANDIDATES: tuple[str, ...] = (
+    # HCA / Human Cell Atlas project-specific or harmonised terms
+    "human cell", "peripheral blood mononuclear cell",
+    "tumor infiltrating lymphocyte", "tissue-resident memory T cell",
+    # Major organs as HCA references them
+    "lung", "liver", "heart", "kidney", "spleen", "thymus",
+    "pancreas", "brain", "bone marrow", "adipose tissue",
+    # Specific HCA cell types
+    "alveolar macrophage", "Kupffer cell", "dendritic cell",
+    "myeloid cell", "lymphoid cell",
+    # Developmental stage / project descriptors
+    "adult human", "fetal human",
+    # Common HCA experimental terms
+    "single cell RNA sequencing",
+)
+
+
+# --- v0.9.0 Tier-2 organism-paired: anatomy + phenotype per species -------
+
+
+FBBT_CANDIDATES: tuple[str, ...] = (
+    # Life stages
+    "adult", "embryo", "larva", "pupa", "first instar larva",
+    "second instar larva", "third instar larva",
+    # Imaginal discs (iconic Drosophila tissue)
+    "imaginal disc", "wing disc", "eye disc", "leg disc",
+    "antennal disc", "haltere disc", "genital disc",
+    # Adult organ systems
+    "ovary", "testis", "germline",
+    "brain", "ventral nerve cord", "central nervous system",
+    "thorax", "abdomen", "head",
+    "gut", "midgut", "hindgut", "foregut",
+    "Malpighian tubule", "fat body",
+    "compound eye", "ocellus",
+    # Tissues
+    "muscle", "indirect flight muscle",
+    "epidermis", "trachea",
+)
+
+
+WBBT_CANDIDATES: tuple[str, ...] = (
+    # Life stages and sexes
+    "adult hermaphrodite", "adult male",
+    "L1 larva", "L2 larva", "L3 larva", "L4 larva",
+    "dauer larva", "embryo",
+    # Reproductive
+    "germ line", "gonad", "oocyte", "spermatheca",
+    # Digestive
+    "intestine", "pharynx", "rectum",
+    # Nervous system
+    "neuron", "motor neuron", "sensory neuron", "interneuron",
+    "nerve ring",
+    # Muscle
+    "body wall muscle", "pharyngeal muscle", "vulval muscle",
+    # Other
+    "vulva", "uterus", "hypodermis", "cuticle",
+    "coelomocyte", "excretory cell",
+)
+
+
+ZFA_CANDIDATES: tuple[str, ...] = (
+    # Life stages
+    "embryo", "larva", "juvenile", "adult",
+    # Early development structures
+    "somite", "notochord", "neural tube", "neural crest",
+    "yolk", "yolk syncytial layer",
+    # Adult / late structures
+    "heart", "atrium", "ventricle",
+    "brain", "spinal cord", "forebrain", "midbrain", "hindbrain",
+    "retina", "lens", "otic vesicle", "otolith",
+    "liver", "intestine", "swim bladder", "pancreas",
+    # Fins
+    "fin", "pectoral fin", "pelvic fin", "dorsal fin",
+    "anal fin", "caudal fin", "fin ray",
+    # Pharyngeal apparatus
+    "pharyngeal arch", "gill",
+)
+
+
+EMAPA_CANDIDATES: tuple[str, ...] = (
+    # Life stages
+    "embryo", "fetus", "neonate", "juvenile", "adult",
+    # Early dev structures
+    "somite", "neural tube", "neural crest",
+    "neural plate", "primitive streak",
+    # Limb development
+    "limb bud", "forelimb bud", "hindlimb bud", "limb",
+    # Cardio-vascular
+    "heart", "heart tube", "atrium", "ventricle",
+    # Brain regions
+    "brain", "forebrain", "midbrain", "hindbrain",
+    "spinal cord", "central nervous system",
+    # Organ primordia
+    "liver", "lung", "pancreas",
+    "kidney", "gonad",
+    # Maternal-fetal
+    "placenta", "umbilical cord", "yolk sac",
+    # Hematopoietic
+    "fetal liver", "bone marrow",
+)
+
+
+ZP_CANDIDATES: tuple[str, ...] = (
+    # Body morphology
+    "abnormal somite morphology", "abnormal trunk morphology",
+    "abnormal head morphology", "abnormal eye morphology",
+    "abnormal heart morphology", "abnormal fin morphology",
+    "abnormal pigmentation",
+    # Developmental
+    "decreased survival", "delayed development",
+    "embryonic lethal", "larval lethal",
+    # Behavior
+    "abnormal swimming behavior", "abnormal touch response",
+    # Tissue-level
+    "abnormal vasculature morphology",
+    "abnormal blood circulation",
+    "abnormal jaw morphology", "abnormal swim bladder morphology",
+    # Specific common ones
+    "absent pigment cell", "decreased pigmentation",
+)
+
+
+XPO_CANDIDATES: tuple[str, ...] = (
+    # Regeneration (Xenopus is the regen model)
+    "abnormal limb regeneration", "abnormal tail regeneration",
+    # Morphology
+    "abnormal limb morphology", "abnormal tail morphology",
+    "abnormal eye morphology", "abnormal heart morphology",
+    "abnormal head morphology",
+    # Developmental
+    "delayed development", "abnormal metamorphosis",
+    "embryonic lethal", "tadpole lethal",
+    # Behavior
+    "abnormal swimming behavior",
+    # Tissue
+    "abnormal pigmentation", "abnormal somite morphology",
+    "abnormal blood vessel morphology",
+)
+
+
 REGISTRY: tuple[OntologyConfig, ...] = (
+    # --- v0.8.0 — Top-7 absolute priority -----------------------------------
     OntologyConfig(
         ols_id="chebi", ontology_label="CHEBI",  axis="chemical",
         out_filename="chebi_concept_index.tsv",
@@ -237,6 +493,79 @@ REGISTRY: tuple[OntologyConfig, ...] = (
         ols_id="envo",  ontology_label="ENVO",   axis="environment",
         out_filename="envo_concept_index.tsv",
         candidates=ENVO_CANDIDATES,
+    ),
+    # --- v0.9.0 Tier-1 universal --------------------------------------------
+    OntologyConfig(
+        ols_id="ms",    ontology_label="MS",     axis="method",
+        out_filename="ms_concept_index.tsv",
+        candidates=MS_CANDIDATES,
+    ),
+    # EC removed from v0.9.0 REGISTRY — the OLS4 ``ec`` ontology re-
+    # exports GO molecular-function terms without human-readable labels
+    # so cascade label-matching can't catch the common enzyme class
+    # names (kinase / phosphatase / etc.). 3 / 30 hits in the first
+    # harvest run. Defer to v0.9.x with a direct EC-name → EC-number
+    # mapping (e.g. from ExPASy enzyme.dat).
+    # OntologyConfig(ols_id="ec", ontology_label="EC", axis="enzyme",
+    #                out_filename="ec_concept_index.tsv",
+    #                candidates=EC_CANDIDATES),
+    OntologyConfig(
+        ols_id="uo",    ontology_label="UO",     axis="unit",
+        out_filename="uo_concept_index.tsv",
+        candidates=UO_CANDIDATES,
+    ),
+    OntologyConfig(
+        ols_id="mod",   ontology_label="MOD",    axis="modification",
+        out_filename="mod_concept_index.tsv",
+        candidates=MOD_CANDIDATES,
+    ),
+    # RXNO and HCAO deferred to v0.9.x — same issue as EC: in OLS4,
+    # ``rxno`` is dominated by CHEBI / BFO imports without named
+    # reaction labels, and ``hcao`` re-publishes CARO / CL / CLO / GO
+    # terms (redundant with our existing CL index). 2 / 16 and 0 / 17
+    # hits respectively in the first harvest. Defer until we have a
+    # source that exposes reaction / atlas labels directly.
+    # OntologyConfig(ols_id="rxno", ontology_label="RXNO", axis="reaction",
+    #                out_filename="rxno_concept_index.tsv",
+    #                candidates=RXNO_CANDIDATES),
+    # OntologyConfig(ols_id="hcao", ontology_label="HCAO", axis="cell_atlas",
+    #                out_filename="hcao_concept_index.tsv",
+    #                candidates=HCAO_CANDIDATES),
+    # --- v0.9.0 Tier-2 organism-paired (anatomy + phenotype) ---------------
+    OntologyConfig(
+        ols_id="fbbt",  ontology_label="FBbt",   axis="drosophila_anatomy",
+        out_filename="fbbt_concept_index.tsv",
+        candidates=FBBT_CANDIDATES,
+    ),
+    OntologyConfig(
+        ols_id="wbbt",  ontology_label="WBbt",   axis="celegans_anatomy",
+        out_filename="wbbt_concept_index.tsv",
+        candidates=WBBT_CANDIDATES,
+    ),
+    OntologyConfig(
+        ols_id="zfa",   ontology_label="ZFA",    axis="zebrafish_anatomy",
+        out_filename="zfa_concept_index.tsv",
+        candidates=ZFA_CANDIDATES,
+    ),
+    OntologyConfig(
+        ols_id="emapa", ontology_label="EMAPA",  axis="mouse_anatomy",
+        out_filename="emapa_concept_index.tsv",
+        candidates=EMAPA_CANDIDATES,
+    ),
+    # ZP deferred to v0.9.x — labels follow a peculiar
+    # "<entity> abnormal, abnormal" pattern that doesn't match
+    # the natural-language "abnormal <entity>" form our candidates
+    # use. 1 / 16 hits in the first harvest. Refining the candidate
+    # list to flip word order is fragile; better to revisit with a
+    # dedicated ZP-pattern-aware harvester later.
+    # OntologyConfig(ols_id="zp", ontology_label="ZP",
+    #                axis="zebrafish_phenotype",
+    #                out_filename="zp_concept_index.tsv",
+    #                candidates=ZP_CANDIDATES),
+    OntologyConfig(
+        ols_id="xpo",   ontology_label="XPO",    axis="xenopus_phenotype",
+        out_filename="xpo_concept_index.tsv",
+        candidates=XPO_CANDIDATES,
     ),
 )
 

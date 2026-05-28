@@ -356,9 +356,20 @@ _CONCEPT_INDEX_COLUMNS: Final[tuple[str, ...]] = (
 
 
 def _load_one_concept_tsv(filename: str) -> list[dict[str, str]]:
-    """Strict-schema TSV loader shared by both concept-index sources."""
+    """Strict-schema TSV loader shared by every concept-index source.
+
+    Tolerant of *missing* files (returns ``[]`` — the index has not yet
+    been built, or was intentionally skipped) but strict on *malformed*
+    headers (raises — corruption shouldn't go silently). This lets the
+    package import cleanly during maintainer build steps that re-
+    generate a subset of the bundled TSVs sequentially.
+    """
     tsv = files("indicium_adapters_transcriptomics.data").joinpath(filename)
-    with tsv.open("r", encoding="utf-8", newline="") as fh:
+    try:
+        fh = tsv.open("r", encoding="utf-8", newline="")
+    except FileNotFoundError:
+        return []
+    with fh:
         reader = csv.DictReader(fh, delimiter="\t")
         if tuple(reader.fieldnames or ()) != _CONCEPT_INDEX_COLUMNS:
             raise RuntimeError(
@@ -407,6 +418,19 @@ def _load_concept_index_rows() -> list[dict[str, str]]:
         "pr_concept_index.tsv",
         "oba_concept_index.tsv",
         "envo_concept_index.tsv",
+        # v0.9.0 Tier-1 universal expansion. EC / RXNO / HCAO deferred
+        # to v0.9.x — see build_extra_ontology_indexes.py for the
+        # per-ontology rationale.
+        "ms_concept_index.tsv",
+        "uo_concept_index.tsv",
+        "mod_concept_index.tsv",
+        # v0.9.0 Tier-2 organism-paired anatomy + phenotype.
+        # ZP deferred to v0.9.x (label-pattern mismatch).
+        "fbbt_concept_index.tsv",
+        "wbbt_concept_index.tsv",
+        "zfa_concept_index.tsv",
+        "emapa_concept_index.tsv",
+        "xpo_concept_index.tsv",
     )
     rows: list[dict[str, str]] = []
     for filename in sources:

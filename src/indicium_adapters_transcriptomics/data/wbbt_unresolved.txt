@@ -1,0 +1,14 @@
+# Candidates for WBbt that did not match via exact or prefix mode.
+# Either the candidate name is too informal / non-canonical
+# (e.g. an acronym not declared as a synonym in OLS4) or
+# the ontology genuinely doesn't cover this term.
+# Format: one term per line.
+
+adult hermaphrodite
+adult male
+L1 larva
+L2 larva
+L3 larva
+L4 larva
+dauer larva
+embryo

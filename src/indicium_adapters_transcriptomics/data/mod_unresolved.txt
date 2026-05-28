@@ -1,0 +1,16 @@
+# Candidates for MOD that did not match via exact or prefix mode.
+# Either the candidate name is too informal / non-canonical
+# (e.g. an acronym not declared as a synonym in OLS4) or
+# the ontology genuinely doesn't cover this term.
+# Format: one term per line.
+
+ubiquitinated residue
+sumoylated residue
+neddylated residue
+prenylated residue
+phosphorylated L-serine
+phosphorylated L-threonine
+phosphorylated L-tyrosine
+dimethylated L-lysine
+trimethylated L-lysine
+citrullinated residue

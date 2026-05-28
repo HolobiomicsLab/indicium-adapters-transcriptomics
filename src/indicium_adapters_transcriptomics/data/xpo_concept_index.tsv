@@ -1,0 +1,10 @@
+term	curie	label	description	ontology	source
+abnormal limb morphology	XPO:0102018	abnormal limb morphology	Any unspecified morphological anomaly of the limb, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal tail morphology	XPO:0102358	abnormal tail morphology	Any unspecified morphological anomaly of the tail, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal eye morphology	XPO:0101817	abnormal eye morphology	Any unspecified morphological anomaly of the eye, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal heart morphology	XPO:0101645	abnormal heart morphology	Any unspecified morphological anomaly of the heart, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal head morphology	XPO:0101634	abnormal head morphology	Any unspecified morphological anomaly of the head, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal metamorphosis	XPO:0141597	abnormal metamorphosis	Abnormal metamorphosis.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal swimming behavior	XPO:0131398	abnormal swimming behavior	An anomaly in swimming behavior.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal somite morphology	XPO:0101798	abnormal somite morphology	Any unspecified morphological anomaly of the somite, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)
+abnormal blood vessel morphology	XPO:0101686	abnormal blood vessel morphology	Any unspecified morphological anomaly of the blood vessel, such as, for example, abnormal shape or colour.	XPO	v0.8.0 ontology harvest (xenopus_phenotype, exact-match)

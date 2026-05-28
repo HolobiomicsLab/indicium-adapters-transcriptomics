@@ -597,19 +597,161 @@ def test_corpus_concept_resolution_is_end_to_end_through_enrich_claim():
     assert xref["label"] == "Illumina"
 
 
-def test_concept_index_carries_all_11_concept_sources():
-    """The quad-TSV loader of v0.5.0 expanded to **eleven** sources at
-    v0.8.0 — the original four (static / OLS4 corpus / bio.tools / CL)
-    plus seven ontology-specific indexes (CHEBI / HP / MP / DOID / PR /
-    OBA / ENVO) harvested from the OLS4 audit. Lower bound only, so
-    adding rows in any file does not break the test."""
+def test_concept_index_carries_all_concept_sources():
+    """Concept-index loader merges all bundled per-source TSVs. Source
+    count has grown over releases:
+
+    - v0.3.0 — static (TranscriptoKG vocab)
+    - v0.3.1 — OLS4 corpus harvest + bio.tools
+    - v0.5.0 — CL (Cell Ontology)
+    - v0.8.0 — Top-7 OLS4 audit picks
+      (CHEBI / HP / MP / DOID / PR / OBA / ENVO)
+    - v0.9.0 — Tier-1 universal (MS / UO / MOD) + Tier-2 organism-paired
+      anatomy / phenotype (FBbt / WBbt / ZFA / EMAPA / XPO).
+
+    Lower bound only — adding rows in any file does not break the
+    test. EC / RXNO / HCAO / ZP are deferred to v0.9.x (see
+    build_extra_ontology_indexes.py for the per-ontology rationale)."""
     n = len(CONCEPT_INDEX)
     # v0.3.0 31 + v0.3.1 17 corpus + v0.3.1 9 biotools + v0.5.0 35 CL
     # + v0.8.0: CHEBI 36 + HP 30 + MP 19 + DOID 29 + PR 18 + OBA 7
-    # + ENVO 15 = 246 rows minimum.
-    assert n >= 31 + 17 + 9 + 35 + 36 + 30 + 19 + 29 + 18 + 7 + 15, (
-        f"expected ≥246 concept rows, got {n}"
-    )
+    # + ENVO 15 = 246. + v0.9.0: MS 21 + UO 35 + MOD 19 + FBbt 34
+    # + WBbt 21 + ZFA 34 + EMAPA 28 + XPO 9 = 447 rows minimum.
+    assert n >= 447, f"expected ≥447 concept rows, got {n}"
+
+
+# --- v0.9.0 ontology-specific harvested indexes -----------------------------
+
+
+def test_v090_ms_mass_spectrometry_resolve():
+    """v0.9.0 PSI-MS pins. MS uses well-curated short labels for the
+    ionisation / mass-analyser / acquisition vocabulary; high yield."""
+    expected = {
+        "electrospray ionization":     "MS:1000073",
+        "matrix-assisted laser desorption ionization": "MS:1000075",
+        "orbitrap":                    "MS:1000484",
+        "data-dependent acquisition":  "MS:1003221",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"MS term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "MS"
+
+
+def test_v090_uo_units_resolve():
+    """v0.9.0 Units Ontology pins. UO is the canonical SI units vocab —
+    essential for quantitative claims."""
+    expected = {
+        "gram":            "UO:0000021",
+        "milliliter":      "UO:0000098",
+        "micromolar":      "UO:0000064",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"UO term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "UO"
+
+
+def test_v090_mod_protein_modifications_resolve():
+    """v0.9.0 PSI-MOD pins. MOD uses ``<verb-form> residue`` /
+    ``<verb-form> L-<aa>`` patterns — candidate list aligned with
+    that convention after the first-pass yield was poor."""
+    expected = {
+        "phosphorylated residue":      "MOD:00696",
+        "acetylated residue":          "MOD:02078",
+        "N-glycosylated residue":      "MOD:00006",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"MOD term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "MOD"
+
+
+def test_v090_fbbt_drosophila_anatomy_resolve():
+    """v0.9.0 FBbt pins — pairs with v0.6.2 FlyBase gene index for
+    Drosophila claims."""
+    expected = {
+        "imaginal disc":  "FBbt:00001761",
+        "wing disc":      "FBbt:00001778",
+        "ocellus":        "FBbt:00004505",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"FBbt term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "FBbt"
+
+
+def test_v090_wbbt_celegans_anatomy_resolve():
+    """v0.9.0 WBbt pins — pairs with v0.6.2 WormBase gene index for
+    C. elegans claims."""
+    expected = {
+        "pharynx":           "WBbt:0003681",
+        "body wall muscle":  "WBbt:0006804",
+        "spermatheca":       "WBbt:0005319",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"WBbt term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "WBbt"
+
+
+def test_v090_zfa_zebrafish_anatomy_resolve():
+    """v0.9.0 ZFA pins — pairs with v0.6.2 ZFIN gene index for
+    zebrafish claims.
+
+    Note 1: ZFA imports zebrafish development stages from the
+    separate ZFS namespace, so life-stage candidates may surface
+    ``ZFS:NNN`` CURIEs.
+
+    Note 2: ``somite`` exists in both ZFA and EMAPA — the loader's
+    priority ladder has EMAPA loaded before ZFA, so ``somite`` resolves
+    via the mouse EMAPA row first. To probe ZFA-specific resolution
+    we pick zebrafish-unique terms (``pectoral fin`` /
+    ``swim bladder``)."""
+    expected = {
+        "notochord":     "ZFA:0000135",
+        "pectoral fin":  "ZFA:0001161",
+        "swim bladder":  "ZFA:0000076",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"ZFA term {term!r} should resolve"
+        assert row["curie"] == curie
+
+
+def test_v090_emapa_mouse_developmental_anatomy_resolve():
+    """v0.9.0 EMAPA pins — pairs with v0.6.0 MGI gene index for
+    Tabula Muris-style mouse developmental claims."""
+    expected = {
+        "limb bud":         "EMAPA:35944",
+        "neural tube":      "EMAPA:16164",
+        "primitive streak": "EMAPA:16072",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"EMAPA term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "EMAPA"
+
+
+def test_v090_xpo_xenopus_phenotype_resolve():
+    """v0.9.0 XPO pins — regeneration / morphology phenotypes for
+    Xenopus (the canonical regeneration model)."""
+    expected = {
+        "abnormal limb morphology":  "XPO:0102018",
+        "abnormal tail morphology":  "XPO:0102358",
+        "abnormal heart morphology": "XPO:0101645",
+    }
+    for term, curie in expected.items():
+        row = CONCEPT_INDEX.lookup(term)
+        assert row is not None, f"XPO term {term!r} should resolve"
+        assert row["curie"] == curie
+        assert row["ontology"] == "XPO"
 
 
 # --- v0.8.0 ontology-specific harvested indexes -----------------------------

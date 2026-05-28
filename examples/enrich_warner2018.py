@@ -138,6 +138,31 @@ CLAIMS: Final[list[ClaimSpec]] = [
          "object": "breast cancer"},
         "v0.8.0 DOID: a disease label → DOID:1612 (cancer subtype)",
     ),
+    # --- v0.9.0: cross-axis multi-ontology coverage -----------------------
+    (
+        "bulk",
+        {"subject": "tabula_muris_study", "qualifier": "expressed_in",
+         "object": "limb bud", "species": "mouse"},
+        "v0.9.0 EMAPA: mouse developmental anatomy → EMAPA:35944",
+    ),
+    (
+        "bulk",
+        {"subject": "drosophila_study", "qualifier": "expressed_in",
+         "object": "wing disc", "species": "drosophila"},
+        "v0.9.0 FBbt: Drosophila imaginal disc → FBbt:00001778",
+    ),
+    (
+        "bulk",
+        {"subject": "ms_proteomics_study", "qualifier": "quantified_with",
+         "object": "orbitrap"},
+        "v0.9.0 MS: mass spec instrument → MS:1000484",
+    ),
+    (
+        "bulk",
+        {"subject": "ptm_study", "qualifier": "tested_with",
+         "object": "phosphorylated residue"},
+        "v0.9.0 PSI-MOD: PTM class → MOD:00696 (multi-axis coverage)",
+    ),
     # --- v0.6.2: Drosophila / C. elegans / Zebrafish -----------------------
     (
         "bulk",

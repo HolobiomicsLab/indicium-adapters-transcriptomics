@@ -145,6 +145,30 @@ new benchmark papers reveal the need.
   cross-reference files per release. Join on FlyBase / WormBase
   id to populate ``ensembl`` for these rows.
 
+### v0.9.0 — Broader ontology coverage for benchmark consistency (done)
+- 8 ontologies added via the existing REGISTRY-driven harvester:
+  Tier-1 universal (MS / UO / MOD) + Tier-2 organism-paired anatomy
+  / phenotype (FBbt / WBbt / ZFA / EMAPA / XPO). 201 new CURIEs.
+- 4 audit-shortlisted ontologies deferred to v0.9.x with per-
+  ontology rationale documented in build_extra_ontology_indexes.py:
+  - EC (re-exports GO, no enzyme-class labels)
+  - RXNO (CHEBI/BFO imports, no named reactions)
+  - HCAO (CL/CARO re-publish, redundant)
+  - ZP ("<entity> abnormal, abnormal" label pattern needs flipping)
+- Loader made tolerant of missing TSVs so maintainer build steps
+  that regenerate a subset don't crash on import.
+
+### v0.9.x — refine the deferred 4
+- EC: wire ExPASy enzyme.dat directly to map enzyme names ↔ EC
+  numbers, bypass OLS4's label-less EC ontology.
+- RXNO: needs a reaction-name database; defer until corpus shows
+  named-reaction mentions worth harvesting.
+- HCAO: redundant with CL — skip unless HCAO ships project-specific
+  cell types not in CL.
+- ZP: write a ZP-pattern-aware harvester that flips
+  "abnormal X morphology" candidates to "X morphology abnormal,
+  abnormal" before searching.
+
 ### v0.8.0 — Top-7 OLS4 ontology indexes (done)
 - ``data/build_extra_ontology_indexes.py`` harvests CHEBI / HP / MP /
   DOID / PR / OBA / ENVO via the same cascade pattern as v0.5.0 CL.
