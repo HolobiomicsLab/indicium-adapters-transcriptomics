@@ -129,14 +129,21 @@ new benchmark papers reveal the need.
   the single-candidate shortcut — the lowercase-only space is too
   ambiguous to auto-route reliably.
 
-### v0.6.3 — Cross-ref polish for invertebrate organisms (planned)
-- Extract Ensembl gene ids for Drosophila and C. elegans (NCBI
-  gene_info uses ``Ensembl_Metazoa`` instead of ``Ensembl`` for
-  these two — needs a second dbXrefs prefix in the parser).
-- Backfill UniProt accessions for Drosophila / C. elegans /
-  zebrafish (and possibly v0.6.0's MGI rows that lacked SwissProt
-  coverage). Source: UniProt's species-specific cross-reference
-  files at https://ftp.uniprot.org/.
+### v0.6.3 — UniProt cross-refs for the v0.6.2 species (done)
+- ``build_gene_index.py`` fetches UniProt's per-organism idmapping
+  files (DROME_7227 / CAEEL_6239 / DANRE_7955) and joins them on the
+  organism-specific id. Yields ~55% Drosophila, ~43% C. elegans,
+  ~39% zebrafish UniProt coverage.
+- ``Ensembl_Metazoa`` accepted alongside ``Ensembl`` in NCBI
+  gene_info dbXrefs — defensive, currently yields 0 for the
+  invertebrates because NCBI doesn't surface those in gene_info.
+
+### v0.6.4 — Invertebrate Ensembl ids (planned)
+- NCBI's gene_info doesn't carry Ensembl Genomes refs for
+  Drosophila / C. elegans. Source those from **Ensembl Genomes
+  FTP** (https://ftp.ensemblgenomes.org/pub/metazoa/) — TSV
+  cross-reference files per release. Join on FlyBase / WormBase
+  id to populate ``ensembl`` for these rows.
 
 ### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
 - `data/build_cl_concept_index.py` harvests CL for the cell-type

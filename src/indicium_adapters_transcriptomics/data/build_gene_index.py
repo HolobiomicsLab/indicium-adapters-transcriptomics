@@ -66,6 +66,32 @@ MGI_URL = "https://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
 # description and dbXrefs. dbXrefs is pipe-separated and contains
 # entries like ``FLYBASE:FBgn0040373`` / ``WormBase:WBGene00022277`` /
 # ``ZFIN:ZDB-GENE-980526-104`` / ``Ensembl:ENSDARG00000021948``.
+# UniProt per-organism id-mapping files (v0.6.3). Tab-separated
+# ``<UniProtKB-AC>\t<TYPE>\t<ID>``; we filter to TYPE = FlyBase /
+# WormBase / ZFIN to build a ``{organism id → UniProt accession}``
+# dict and merge it into the gene_index rows.
+UNIPROT_BY_ORGANISM_URLS: dict[str, str] = {
+    "drosophila": (
+        "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
+        "knowledgebase/idmapping/by_organism/DROME_7227_idmapping.dat.gz"
+    ),
+    "celegans": (
+        "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
+        "knowledgebase/idmapping/by_organism/CAEEL_6239_idmapping.dat.gz"
+    ),
+    "zebrafish": (
+        "https://ftp.uniprot.org/pub/databases/uniprot/current_release/"
+        "knowledgebase/idmapping/by_organism/DANRE_7955_idmapping.dat.gz"
+    ),
+}
+
+# Which idmapping TYPE column we read for each organism.
+_SPECIES_UNIPROT_TYPE: dict[str, str] = {
+    "drosophila": "FlyBase",
+    "celegans":   "WormBase",
+    "zebrafish":  "ZFIN",
+}
+
 NCBI_GENE_INFO_URLS: dict[str, str] = {
     "drosophila": (
         "https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Invertebrates/"
@@ -169,6 +195,38 @@ def _download_mgi(target: Path) -> None:
     _download_url(MGI_URL, target, tag="mgi")
 
 
+def _load_uniprot_by_organism(
+    path: Path, organism_type: str
+) -> dict[str, str]:
+    """Parse a UniProt per-organism idmapping.dat.gz file and return
+    a ``{organism-specific id → UniProt accession}`` dict for the
+    given ``organism_type`` (e.g. ``"FlyBase"`` / ``"WormBase"`` /
+    ``"ZFIN"``).
+
+    Each line of the file is ``<UniProtKB-AC>\\t<TYPE>\\t<ID>``;
+    we filter to the requested TYPE. Multiple UniProt accessions per
+    organism id are possible (paralog / fragment entries); the first
+    one wins under load order, which is OK because UniProt sorts
+    SwissProt-reviewed accessions before TrEMBL.
+    """
+    out: dict[str, str] = {}
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) != 3:
+                continue
+            uniprot_ac, type_col, org_id = parts
+            if type_col != organism_type:
+                continue
+            if org_id and uniprot_ac and org_id not in out:
+                out[org_id] = uniprot_ac
+    print(
+        f"[uniprot] indexed {len(out):,} {organism_type}→UniProt rows",
+        file=sys.stderr,
+    )
+    return out
+
+
 def _load_ncbi_gene_info(
     path: Path, species: str
 ) -> list[dict[str, str]]:
@@ -217,7 +275,12 @@ def _load_ncbi_gene_info(
                 key_lc = key.strip().lower()
                 if not org_id and key_lc in org_prefixes:
                     org_id = val.strip()
-                elif not ensembl and key_lc == "ensembl":
+                elif not ensembl and key_lc in ("ensembl", "ensembl_metazoa"):
+                    # v0.6.3: NCBI uses Ensembl_Metazoa for the invertebrate
+                    # divisions (Drosophila / C. elegans); zebrafish stays on
+                    # plain Ensembl. Accept both so the runtime sees a
+                    # single ``ensembl`` column populated regardless of
+                    # which division the organism comes from.
                     ensembl = val.strip()
 
             rows.append({
@@ -429,6 +492,7 @@ def build(
     *,
     mgi_xrefs: dict[str, dict[str, str]] | None = None,
     other_species_rows: dict[str, list[dict[str, str]]] | None = None,
+    other_species_uniprot: dict[str, dict[str, str]] | None = None,
 ) -> int:
     """Read G2V2 + HGNC + MGI, join, emit the bundled TSV. Return row count.
 
@@ -562,23 +626,29 @@ def build(
         # Step 4 — other model organisms (v0.6.2): Drosophila / C. elegans
         # / zebrafish from NCBI gene_info files.
         n_other = {sp: 0 for sp in NCBI_GENE_INFO_URLS}
+        n_other_uniprot = {sp: 0 for sp in NCBI_GENE_INFO_URLS}
         for species, rows in (other_species_rows or {}).items():
             org_col = _SPECIES_ORG_COLUMN.get(species)
             if org_col is None:
                 continue
+            uniprot_map = (other_species_uniprot or {}).get(species, {})
             for r in rows:
+                org_id = r.get(org_col, "") if org_col in r else ""
+                uniprot = uniprot_map.get(org_id, "") if org_id else ""
+                if uniprot:
+                    n_other_uniprot[species] += 1
                 w.writerow({
                     "symbol": r["symbol"],
                     "hgnc": "",
                     "mgi": "",
-                    "flybase": r.get("flybase", "") if org_col == "flybase" else "",
-                    "wormbase": r.get("wormbase", "") if org_col == "wormbase" else "",
-                    "zfin": r.get("zfin", "") if org_col == "zfin" else "",
+                    "flybase": org_id if org_col == "flybase" else "",
+                    "wormbase": org_id if org_col == "wormbase" else "",
+                    "zfin": org_id if org_col == "zfin" else "",
                     "ensembl": r.get("ensembl", ""),
                     "ncbigene": r.get("ncbigene", ""),
                     "nemve1": "",
                     "nvertx": "",
-                    "uniprot": "",
+                    "uniprot": uniprot,
                     "species": species,
                     "description": r.get("description", ""),
                 })
@@ -596,9 +666,12 @@ def build(
         f"         with Ensembl xref   : {n_mgi_with_ensembl:,}\n"
         f"         with Entrez xref    : {n_mgi_with_entrez:,}\n"
         f"         with UniProt xref   : {n_mgi_with_uniprot:,}\n"
-        f"       Drosophila            : {n_other.get('drosophila', 0):,}\n"
-        f"       C. elegans            : {n_other.get('celegans', 0):,}\n"
-        f"       Zebrafish             : {n_other.get('zebrafish', 0):,}",
+        f"       Drosophila            : {n_other.get('drosophila', 0):,}"
+        f"  (+{n_other_uniprot.get('drosophila', 0):,} UniProt xref)\n"
+        f"       C. elegans            : {n_other.get('celegans', 0):,}"
+        f"  (+{n_other_uniprot.get('celegans', 0):,} UniProt xref)\n"
+        f"       Zebrafish             : {n_other.get('zebrafish', 0):,}"
+        f"  (+{n_other_uniprot.get('zebrafish', 0):,} UniProt xref)",
         file=sys.stderr,
     )
     return n_total
@@ -678,6 +751,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip the v0.6.2 Drosophila / C. elegans / zebrafish step "
              "(emits human + mouse + Nematostella only).",
     )
+    # v0.6.3 — UniProt per-organism idmapping for the three new species.
+    parser.add_argument(
+        "--drosophila-uniprot-cache", type=Path,
+        default=cache_dir / "DROME_7227_idmapping.dat.gz",
+        help="Where to cache the UniProt Drosophila idmapping file.",
+    )
+    parser.add_argument(
+        "--celegans-uniprot-cache", type=Path,
+        default=cache_dir / "CAEEL_6239_idmapping.dat.gz",
+        help="Where to cache the UniProt C. elegans idmapping file.",
+    )
+    parser.add_argument(
+        "--zebrafish-uniprot-cache", type=Path,
+        default=cache_dir / "DANRE_7955_idmapping.dat.gz",
+        help="Where to cache the UniProt zebrafish idmapping file.",
+    )
+    parser.add_argument(
+        "--no-other-species-uniprot", action="store_true",
+        help="Skip the v0.6.3 UniProt cross-ref pass for "
+             "Drosophila / C. elegans / zebrafish.",
+    )
     args = parser.parse_args(argv)
     hgnc_path = args.hgnc_tsv
     if hgnc_path is None:
@@ -706,6 +800,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     other_species_rows: dict[str, list[dict[str, str]]] | None = None
+    other_species_uniprot: dict[str, dict[str, str]] | None = None
     if not args.no_other_species:
         other_species_rows = {}
         species_caches = {
@@ -719,10 +814,26 @@ def main(argv: list[str] | None = None) -> int:
                 _download_url(url, cache, tag=species)
             other_species_rows[species] = _load_ncbi_gene_info(cache, species)
 
+        if not args.no_other_species_uniprot:
+            other_species_uniprot = {}
+            uniprot_caches = {
+                "drosophila": args.drosophila_uniprot_cache,
+                "celegans":   args.celegans_uniprot_cache,
+                "zebrafish":  args.zebrafish_uniprot_cache,
+            }
+            for species, cache in uniprot_caches.items():
+                url = UNIPROT_BY_ORGANISM_URLS[species]
+                if not cache.is_file():
+                    _download_url(url, cache, tag=f"{species}-uniprot")
+                other_species_uniprot[species] = _load_uniprot_by_organism(
+                    cache, _SPECIES_UNIPROT_TYPE[species]
+                )
+
     build(
         args.g2v2_xlsx, hgnc_path, mgi_path, args.out,
         mgi_xrefs=mgi_xrefs,
         other_species_rows=other_species_rows,
+        other_species_uniprot=other_species_uniprot,
     )
     return 0
 

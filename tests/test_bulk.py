@@ -352,7 +352,11 @@ def test_drosophila_unique_symbol_resolves_to_flybase():
     """v0.6.2: a drosophila-unique gene name (``dpp`` = decapentaplegic,
     no overlap with other organisms) resolves to its FlyBase CURIE
     without needing a species hint — the single-candidate shortcut in
-    GeneIndex.lookup picks the only row."""
+    GeneIndex.lookup picks the only row.
+
+    v0.6.3: the row's xrefs now carry the UniProt accession too
+    (P07713) thanks to the UniProt per-organism idmapping join.
+    """
     a = BulkTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "dpp",
@@ -360,6 +364,9 @@ def test_drosophila_unique_symbol_resolves_to_flybase():
         "object": "wing_disc",
     })
     assert out["ontology_terms"]["subject"] == "FlyBase:FBgn0000490"
+    xrefs = out["xrefs"]["subject"]
+    assert xrefs.get("flybase") == "FBgn0000490"
+    assert xrefs.get("uniprot") == "P07713"  # v0.6.3 UniProt join
 
 
 def test_drosophila_via_species_hint_disambiguates_collision():
@@ -388,7 +395,11 @@ def test_celegans_xxx_dash_n_pattern_triggers_heuristic():
     """v0.6.2 casing heuristic recognises the C. elegans symbol
     pattern (3-4 lowercase letters + hyphen + alphanumeric) — most
     distinctive convention across the supported organisms.
-    ``unc-22`` → WormBase:WBGene00006759."""
+    ``unc-22`` → WormBase:WBGene00006759.
+
+    v0.6.3: the xrefs map now also carries the UniProt accession
+    Q23551 (twitchin) thanks to the UniProt per-organism join.
+    """
     a = BulkTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "unc-22",
@@ -396,6 +407,7 @@ def test_celegans_xxx_dash_n_pattern_triggers_heuristic():
         "object": "muscle",
     })
     assert out["ontology_terms"]["subject"] == "WormBase:WBGene00006759"
+    assert out["xrefs"]["subject"].get("uniprot") == "Q23551"  # v0.6.3
 
 
 def test_zebrafish_unique_symbol_resolves_via_single_candidate():

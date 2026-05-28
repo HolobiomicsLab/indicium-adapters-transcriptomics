@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.6.3 — UniProt cross-refs for Drosophila / C. elegans / Zebrafish (2026-05-28)
+
+### Added
+
+- `build_gene_index.py` now fetches UniProt's **per-organism
+  idmapping** files (gzip TSVs, ~5-12 MB each) for the v0.6.2
+  species and joins them on the organism-specific id to populate
+  the ``uniprot`` column. URLs:
+  - DROME_7227_idmapping.dat.gz (Drosophila)
+  - CAEEL_6239_idmapping.dat.gz (C. elegans)
+  - DANRE_7955_idmapping.dat.gz (zebrafish)
+- New helper ``_load_uniprot_by_organism(path, organism_type)``
+  parses the three-column TSV and returns a
+  ``{organism-id → UniProt accession}`` dict, filtered to the
+  ``FlyBase`` / ``WormBase`` / ``ZFIN`` TYPE column.
+- Per-cache CLI options (``--drosophila-uniprot-cache``,
+  ``--celegans-uniprot-cache``, ``--zebrafish-uniprot-cache``)
+  plus ``--no-other-species-uniprot`` to skip.
+- Yields after the v0.6.3 rebuild:
+  - Drosophila: 13,941 rows enriched with UniProt (~55.6%).
+  - C. elegans: 19,974 rows (~42.6%).
+  - Zebrafish:  20,983 rows (~38.5%).
+  - The non-100% coverage reflects UniProt's catalog itself —
+    not every annotated NCBI / FlyBase / WormBase / ZFIN gene
+    has a UniProt entry (especially non-coding RNAs, pseudogenes,
+    predicted ORFs).
+
+### Changed
+
+- ``_load_ncbi_gene_info`` now accepts ``Ensembl_Metazoa`` as
+  well as ``Ensembl`` in the ``dbXrefs`` column, in anticipation
+  of NCBI surfacing Ensembl Genomes cross-refs for invertebrate
+  organisms. As of 2026-05-28 NCBI's gene_info files for
+  Drosophila and C. elegans do **not** include any Ensembl /
+  Ensembl_Metazoa entries (only FlyBase / WormBase + AllianceGenome
+  + miRBase appear in dbXrefs), so the parser change is defensive
+  and yields zero new Ensembl cross-refs on this run. Backfilling
+  invertebrate Ensembl ids requires a separate source — Ensembl
+  Genomes FTP files — scheduled for v0.6.4.
+
+### Tests
+
+- Two existing v0.6.2 pins extended: ``dpp`` now also asserts
+  ``uniprot=P07713``; ``unc-22`` asserts ``uniprot=Q23551``.
+
+### Notes
+
+- Mouse UniProt coverage from v0.6.1 (~31%) could similarly be
+  improved using UniProt's MOUSE_10090_idmapping.dat.gz — same
+  pattern as the new species, swapping ``MGI`` as the TYPE column.
+  Not done in v0.6.3 because the MRK_SwissProt_TrEMBL.rpt source
+  already covers it; the UniProt mapping file would mostly add
+  TrEMBL accessions and isoforms with diminishing returns.
+
 ## v0.6.2 — Drosophila / C. elegans / Zebrafish gene indexes (2026-05-28)
 
 ### Added — three model organisms
