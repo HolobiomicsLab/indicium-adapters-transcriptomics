@@ -153,14 +153,23 @@ new benchmark papers reveal the need.
 - ``examples/test_on_papers.py`` real-paper smoke test (10 claims
   from Warner + Tabula Muris with SHACL validation).
 
-### v0.11.0 — Real-corpus smoke test via SciLEx (planned)
-- Use SciLEx (Celian Ringwald's literature crawler) to pull a
-  ~10-paper diverse corpus covering the 6 supported organisms
-  (human / mouse / Nematostella / Drosophila / C. elegans / zebrafish)
-  across both modalities (bulk / single-cell).
-- Hand-extract ~3-5 claims per paper from titles + abstracts.
-- Expand ``examples/test_on_papers.py`` to run the full pipeline
-  end-to-end on this diverse corpus + report a coverage matrix.
+### v0.11.0 — Real-corpus smoke test on 16 papers, 45 claims (done)
+- Expanded ``examples/test_on_papers.py`` from the v0.10.0
+  minimum-viable 2-paper / 10-claim smoke test to a 16-paper /
+  45-claim corpus covering the six supported organisms across
+  bulk, single-cell, spatial and long-read modalities, plus four
+  methodology reviews for vocabulary-density coverage.
+- 4 new PDFs added to ``articles/``: Brunet Avalos 2019
+  (Drosophila), Packer 2019 (C. elegans), Wagner 2018 (zebrafish),
+  Tirosh 2016 (melanoma).
+- Claims hand-curated with traceable sources (PDF text mining for
+  the 10 PDF-backed papers, prior corpus extraction for Warner /
+  Cheung, PubMed efetch abstracts for the 4 reviews). Not
+  full-text LLM extraction.
+- Result: 44/45 enriched (~98%), 18 distinct ontologies fired,
+  SHACL conforms on the synthesised RDF data graph.
+- One known unresolved term: ``scVI`` (absent from bio.tools,
+  documented since v0.6.x).
 
 ### v1.0.0 — Stable release (planned)
 - ``CITATION.cff`` (siblings don't have it — leading move).

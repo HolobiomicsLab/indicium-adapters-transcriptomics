@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>indicium-adapters-transcriptomics: Development Report</title>
+<style>
+  :root {
+    --ink: #1a2740;
+    --accent: #2c5f8d;
+    --accent-light: #4a85b5;
+    --rule: #d9dde2;
+    --bg: #fbfbfd;
+    --code-bg: #f3f4f7;
+    --table-stripe: #f7f8fa;
+    --warn: #c0660b;
+    --success: #2d7a4c;
+  }
+  html { font-size: 16px; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", "Source Sans Pro", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    max-width: 900px;
+    margin: 3rem auto;
+    padding: 0 2rem 4rem 2rem;
+    line-height: 1.65;
+  }
+  header { border-bottom: 2px solid var(--accent); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; margin: 0 0 0.4rem 0; color: var(--accent); font-weight: 600; letter-spacing: -0.01em; }
+  header .subtitle { font-size: 1.15rem; color: var(--ink); margin: 0 0 0.2rem 0; font-style: italic; }
+  header .meta { color: #6a7080; font-size: 0.92rem; margin: 0; }
+  nav.toc { background: white; border: 1px solid var(--rule); border-radius: 6px; padding: 1.25rem 1.5rem; margin: 2rem 0; }
+  nav.toc h2 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--ink); text-transform: uppercase; letter-spacing: 0.05em; }
+  nav.toc ol { margin: 0; padding-left: 1.3rem; columns: 2; column-gap: 2rem; }
+  nav.toc li { margin: 0.25rem 0; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  h2 { color: var(--accent); border-bottom: 1px solid var(--rule); padding-bottom: 0.3rem; margin-top: 2.5rem; font-weight: 600; font-size: 1.45rem; }
+  h3 { color: var(--accent-light); margin-top: 1.8rem; font-size: 1.15rem; font-weight: 600; }
+  h4 { color: var(--ink); margin-top: 1.3rem; font-size: 1rem; font-weight: 600; }
+  p, li { font-size: 1rem; }
+  code, kbd { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 0.88em; background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 3px; }
+  pre { background: var(--code-bg); padding: 1rem 1.25rem; border-left: 3px solid var(--accent-light); border-radius: 0 4px 4px 0; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 1.2rem 0; }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 1.25rem 0; font-size: 0.94rem; }
+  th, td { padding: 0.55rem 0.85rem; text-align: left; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { background: var(--accent); color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .abstract { background: white; border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 1.2rem 1.5rem; border-radius: 0 4px 4px 0; margin: 1.5rem 0; }
+  .abstract p { margin: 0.6rem 0; font-size: 0.97rem; }
+  .abstract p:first-child { margin-top: 0; }
+  .abstract p:last-child { margin-bottom: 0; }
+  .callout { background: #fdf7ef; border-left: 3px solid var(--warn); padding: 0.8rem 1.1rem; border-radius: 0 4px 4px 0; margin: 1.2rem 0; font-size: 0.94rem; }
+  .callout strong { color: var(--warn); }
+  .success { background: #f0f8f3; border-left: 3px solid var(--success); padding: 0.8rem 1.1rem; border-radius: 0 4px 4px 0; margin: 1.2rem 0; font-size: 0.94rem; }
+  .success strong { color: var(--success); }
+  figure { margin: 1.5rem 0; }
+  figcaption { font-size: 0.88rem; color: #6a7080; text-align: center; margin-top: 0.5rem; font-style: italic; }
+  .diagram { background: white; border: 1px solid var(--rule); padding: 1.25rem; border-radius: 4px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.85rem; white-space: pre; line-height: 1.4; overflow-x: auto; }
+  ul.refs { padding-left: 1.2rem; font-size: 0.93rem; }
+  ul.refs li { margin: 0.5rem 0; }
+  .num { font-variant-numeric: tabular-nums; }
+  .small { font-size: 0.85rem; color: #6a7080; }
+  footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); font-size: 0.85rem; color: #6a7080; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>indicium-adapters-transcriptomics</h1>
+  <p class="subtitle">A domain adapter for transcriptomics claims in the ASB knowledge-graph framework</p>
+  <p class="meta">Development report, version 0.11.0. Dina Boukhajou, IRCAN / UniCA. 2026.</p>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#abstract">Abstract</a></li>
+    <li><a href="#introduction">Introduction</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#sources">Data sources</a></li>
+    <li><a href="#methods">Resolution methods</a></li>
+    <li><a href="#timeline">Release timeline</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#limitations">Limitations</a></li>
+    <li><a href="#future">Future work</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+
+<section id="abstract">
+<h2>Abstract</h2>
+<div class="abstract">
+<p>This report documents the development of <code>indicium-adapters-transcriptomics</code>, a domain adapter for transcriptomics-claim enrichment in the <em>AgenticScienceBuilder</em> (ASB) knowledge-graph pipeline. The adapter implements two siblings, <code>BulkTranscriptomicsAdapter</code> and <code>SingleCellTranscriptomicsAdapter</code>, both conformant with the <code>indicium</code> core <code>DomainAdapter</code> protocol. Across versions 0.4.0 to 0.11.0 the adapter grew from a scaffolding stage to an end-to-end pipeline that ingests repository metadata (GEO SOFT, ENA XML, BioStudies JSON, ISA-Tab), enriches free-text claims with CURIEs drawn from a 19-source concept index (~447 verified entries spanning EFO, OBI, NCIT, STATO, GO, CL, UBERON, ChEBI, HP, MP, DOID, PR, OBA, ENVO, MS, UO, MOD, FBbt, WBbt, ZFA, EMAPA, XPO and bio.tools), and resolves gene symbols across six model organisms from a bundled 254,922-row index built from HGNC, MGI, FlyBase, WormBase, ZFIN and the <em>Nematostella vectensis</em> G2V2 cross-reference. Symbol-level collisions across species are disambiguated by an optional <code>species</code> claim hint and a casing heuristic (UPPER for human, Title-case for mouse, the <code>xxx-N</code> pattern for <em>C. elegans</em>). A study-versus-feature qualifier-aware resolver chain prevents the well-known <code>STAR</code> aligner / steroidogenic acute regulatory protein gene collision. End-to-end validation on a 16-paper hand-curated corpus (45 claims) yields 98% enrichment with 18 distinct ontologies firing and full SHACL conformance.</p>
+</div>
+</section>
+
+<section id="introduction">
+<h2>1. Introduction</h2>
+
+<h3>1.1 Context</h3>
+<p>Knowledge-graph (KG) construction from biomedical literature increasingly relies on large language models (LLMs) for fact extraction. The <em>AgenticScienceBuilder</em> (ASB) framework, developed in our laboratory, evaluates such pipelines on a corpus of biomedical and transcriptomics studies. ASB ingests <em>claims</em>, that is triples of the form <code>(subject, qualifier, object)</code>, validates them against domain-specific SHACL shapes, and stores them as nanopublications in a triplestore.</p>
+<p>For the system to interoperate with downstream tools, free-text mentions in claims must be lifted to canonical CURIEs (Compact URIs) drawn from community-curated ontologies and registries. The <code>indicium</code> core provides the <code>DomainAdapter</code> protocol that domain-specific resolvers must implement; <code>indicium-adapters-transcriptomics</code> is the implementation for transcriptomics.</p>
+
+<h3>1.2 Goals</h3>
+<p>The adapter is designed to fulfil three roles, derived from the four-quadrant filter that governs scope decisions in the project:</p>
+<ol>
+  <li><strong>Constrain</strong> the LLM extraction stage, by exposing a closed set of domain qualifiers (<code>differentially_expressed_in</code>, <code>marker_of_cell_type</code>, <code>sequenced_on</code>, and so on) and an extraction-context prompt.</li>
+  <li><strong>Resolve</strong> free-text identifiers to canonical CURIEs (gene symbols to HGNC, accessions to GEO, instrument names to EFO, cell types to CL, and so on).</li>
+  <li><strong>Validate</strong> claim outputs against SHACL shapes, in particular the CURIE-format <code>NodeShape</code> shared across siblings.</li>
+</ol>
+<p>The fourth quadrant, behaviours an LLM could perform as well freehand, is explicitly out of scope.</p>
+
+<h3>1.3 Sibling context</h3>
+<p>The package is one of three sibling adapters in the indicium ecosystem: <code>indicium-adapters-transcriptomics</code> (this work), <code>indicium-adapters-metabolomics</code>, and <code>indicium-adapters-epigenomics</code>. The three share the DomainAdapter contract and partition the qualifier vocabulary so that <code>compose_adapters</code> produces a clean union without shadowing.</p>
+</section>
+
+<section id="architecture">
+<h2>2. Architecture</h2>
+
+<h3>2.1 Two siblings, one composed surface</h3>
+<p>The package exports two adapter classes registered under the <code>indicium.adapters</code> entry-point group:</p>
+<ul>
+  <li><code>BulkTranscriptomicsAdapter</code> handles bulk RNA-seq, microarray and time-series expression claims plus study-level assay metadata. Its 13 qualifiers span feature-level claims and study-level qualifiers such as <code>sequenced_on</code>, <code>aligned_with</code>, <code>quantified_with</code>.</li>
+  <li><code>SingleCellTranscriptomicsAdapter</code> handles cell-resolution claims (cell-type markers, cluster enrichment, spatial localisation). Its 5 qualifiers are disjoint from those of the bulk adapter, an invariant enforced by <code>tests/test_composition.py</code>.</li>
+</ul>
+<p>Both adapters share the <code>TRANSCRIPTOMICS_PREFIXES</code> CURIE-prefix map, the <code>GENE_INDEX</code>, <code>ANATOMY_INDEX</code> and <code>CONCEPT_INDEX</code> singletons, the resolver helpers, and the SHACL shapes graph.</p>
+
+<h3>2.2 Resolver dispatch</h3>
+<p>Both adapters use a uniform dispatcher pattern (introduced in v0.4.0). Each resolver accepts <code>(name: str, species: str | None = None)</code> and returns <code>(curie, xrefs) | None</code>. The <code>enrich_claim</code> method walks resolvers in a per-qualifier priority order:</p>
+<figure>
+<div class="diagram">claim dict
+  |
+  v
+  +--&gt; for slot in (subject, object):
+  |       |
+  |       v
+  |       priority = QUALIFIER_PRIORITY.get(qualifier, DEFAULT_PRIORITY)
+  |       |
+  |       v
+  |       for resolver_name in priority:
+  |          resolver(name, species=hint) --&gt; (curie, xrefs) | None
+  |          if hit: attach &amp; break
+  |
+  v
+enriched dict
+</div>
+<figcaption>Resolver dispatch in <code>BulkTranscriptomicsAdapter.enrich_claim</code>. Per-qualifier priority lets the adapter resolve <code>STAR</code> as <code>biotools:star</code> under <code>aligned_with</code> and as <code>HGNC:11359</code> under <code>expressed_in</code>.</figcaption>
+</figure>
+
+<h3>2.3 Priority orders</h3>
+<table>
+<tr><th>Qualifier class</th><th>Priority chain</th><th>Rationale</th></tr>
+<tr><td>Default (feature claims)</td><td>accession &gt; gene &gt; concept</td><td>Gene mentions dominate feature claims; accessions are unambiguous and resolve first.</td></tr>
+<tr><td>Study-level (<code>sequenced_on</code>, <code>aligned_with</code>, <code>quantified_with</code>, etc.)</td><td>concept &gt; accession &gt; gene</td><td>Object slot is typically a tool / platform / database. Resolves the <code>STAR</code> collision in favour of the aligner.</td></tr>
+</table>
+
+<h3>2.4 Species-aware lookup (gene resolver)</h3>
+<p>The gene resolver disambiguates symbol-level collisions (<code>MAPK1</code> for human vs <code>Mapk1</code> for mouse, both lower-cased to <code>mapk1</code>) using three rules in cascade:</p>
+<ol>
+  <li><strong>Explicit hint</strong>. If the claim carries a <code>species</code> field, the resolver filters candidates to that species first.</li>
+  <li><strong>Casing heuristic</strong>. UPPER-case symbols default to human, Title-case to mouse, the <code>xxx-N</code> pattern (three lowercase letters, hyphen, alphanumeric tail) to <em>C. elegans</em>. Lower-case is intentionally ambiguous and falls through to the load-order rule, preserving v0.1.x case-insensitive forgiveness for human-symbol typos.</li>
+  <li><strong>Cross-listed fallback</strong>. A Nematostella row carrying a human HGNC ortholog also serves human-species lookups. Without this rule, a casing-heuristic vote for "human" on <code>MMP9</code> would miss because the only matching row is tagged <code>nematostella</code>.</li>
+</ol>
+</section>
+
+<section id="sources">
+<h2>3. Data sources</h2>
+
+<h3>3.1 Gene index (six organisms, 254,922 rows)</h3>
+<p>The bundled <code>gene_index.tsv</code> is built by <code>data/build_gene_index.py</code> from six authoritative sources:</p>
+<table>
+<tr><th>Source</th><th>Organism</th><th>Rows</th><th>Notes</th></tr>
+<tr><td>HGNC complete set</td><td>human</td><td class="num">38,953</td><td>Pure-HGNC rows for human genes not paired with a Nematostella entry.</td></tr>
+<tr><td>G2V2 cross-reference</td><td>Nematostella vectensis</td><td class="num">14,150</td><td>JGI / NvERTx / NVE / Nv2g / UniProt alignment; HGNC ortholog attached via UniProt or symbol-fallback join.</td></tr>
+<tr><td>MGI MRK_List2 + cross-refs</td><td>mouse</td><td class="num">75,250</td><td>85% Ensembl, 60% NCBI Gene, 31% UniProt cross-refs from MRK_ENSEMBL, MGI_EntrezGene, MRK_SwissProt_TrEMBL.</td></tr>
+<tr><td>NCBI gene_info (Drosophila)</td><td>Drosophila melanogaster</td><td class="num">25,079</td><td>99.9% FlyBase identifiers, UniProt via DROME idmapping (56%).</td></tr>
+<tr><td>NCBI gene_info (C. elegans)</td><td>Caenorhabditis elegans</td><td class="num">46,927</td><td>99.9% WormBase identifiers, UniProt via CAEEL idmapping (43%).</td></tr>
+<tr><td>NCBI gene_info (zebrafish)</td><td>Danio rerio</td><td class="num">54,563</td><td>50% ZFIN, 40% Ensembl, UniProt via DANRE idmapping (39%).</td></tr>
+<tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>254,922</strong></td><td>11 column schema: symbol, hgnc, mgi, flybase, wormbase, zfin, ensembl, ncbigene, nemve1, nvertx, uniprot, species, description.</td></tr>
+</table>
+
+<h3>3.2 Concept index (19 sources, ~447 entries)</h3>
+<p>The bundled concept index merges 19 TSVs in a priority order encoding source grounding (paper-modelling-grounded first, OLS4-method-mention second, registry-grounded third, single-ontology harvests fourth). Each entry has been verified against its source ontology at build time (OLS4 IRI lookup or bio.tools API direct ID).</p>
+<table>
+<tr><th>Source</th><th>Release</th><th>Coverage</th></tr>
+<tr><td>TranscriptoKG static vocabulary</td><td>v0.3.0</td><td>31 entries: NCIT analysis concepts, INO regulation, OBI investigation, STATO statistics, GO roots.</td></tr>
+<tr><td>OLS4 corpus harvest</td><td>v0.3.1, v0.5.0</td><td>17 entries: platforms (Illumina, MARS-seq, Smart-seq2, Drop-seq, Slide-seq), statistical tests (t-Test, Wilcoxon, Benjamini-Hochberg).</td></tr>
+<tr><td>bio.tools registry</td><td>v0.3.1</td><td>9 entries: STAR, Bowtie, Bowtie2, Minimap2, RSEM, StringTie, DESeq2, Seurat, Picard.</td></tr>
+<tr><td>Cell Ontology (CL)</td><td>v0.5.0</td><td>35 entries spanning cnidarian and mammalian cell types.</td></tr>
+<tr><td>Top-7 OLS4 audit picks</td><td>v0.8.0</td><td>154 entries from ChEBI, HP, MP, DOID, PR, OBA, ENVO.</td></tr>
+<tr><td>Universal Tier-1 expansion</td><td>v0.9.0</td><td>75 entries from MS (PSI-MS), UO, MOD (PSI-MOD).</td></tr>
+<tr><td>Organism-paired Tier-2</td><td>v0.9.0</td><td>126 entries from FBbt (Drosophila), WBbt (C. elegans), ZFA (zebrafish), EMAPA (mouse developmental anatomy), XPO (Xenopus phenotype).</td></tr>
+</table>
+
+<h3>3.3 Anatomy index</h3>
+<p>A 4-entry hand-curated UBERON anatomy index, built by <code>data/build_anatomy_index.py</code> with strict OLS4 label-match verification (no hyponym promotion). Coverage focuses on the Cheung 2024 Tomo-seq context: <em>mesentery</em>, <em>pharynx</em>, <em>body wall</em>, <em>organism subdivision</em>. Cnidarian-specific concepts (<em>physa</em>, <em>mesoglea</em>, <em>gastrodermis</em>, <em>oral / aboral pole</em>, <em>body column</em>, <em>polyp body form</em>) are deliberately absent because UBERON has no entry for them; they are listed in <code>TRIAGED_OUT_KNOWN_CNIDARIAN</code> for transparency.</p>
+</section>
+
+<section id="methods">
+<h2>4. Resolution methods</h2>
+
+<h3>4.1 OLS4 harvester cascade</h3>
+<p>Concept indexes are populated by a per-axis cascade of three match modes implemented in <code>data/build_corpus_concept_candidates.py</code>:</p>
+<ol>
+  <li><strong>Exact</strong>. Label or synonym equals the corpus term verbatim (case-insensitive). Default for axes where false positives would be harmful (software tools, statistical tests).</li>
+  <li><strong>Prefix</strong>. The corpus term is the whole-word prefix of the OLS4 label. Lets descriptive suffixes through, so <em>Wilcoxon</em> resolves to <em>Wilcoxon Signed Rank Test</em>, <em>Visium</em> to <em>Visium Spatial Gene Expression</em>.</li>
+  <li><strong>Substring</strong>. The corpus term appears as a whole-word substring of the label. Used for instrument families whose canonical EFO label prepends a vendor name (<em>NovaSeq</em> → <em>Illumina NovaSeq 6000</em>).</li>
+</ol>
+<p>The cascade is tried depth-first across the axis's preferred ontology list: a strict match in any preferred ontology wins over a relaxed match in the first ontology. A label-first refinement (v0.5.0) ensures that when OLS4's relevance ranking puts a synonym-match doc ahead of a label-match doc (the <em>macrophage</em> → <em>plasmatocyte</em> case), the canonical label-match still wins.</p>
+
+<h3>4.2 bio.tools harvester</h3>
+<p>Bioinformatics software is not consistently indexed in OBO-Foundry ontologies. The bio.tools registry fills that gap. <code>data/build_biotools_index.py</code> tries direct-ID lookup first (lowercased, spaces to hyphens), then a search fallback with exact name match. A normalised name match catches stylistic variants such as <em>Bowtie2</em> ↔ <em>Bowtie 2</em>.</p>
+
+<h3>4.3 Metadata parsers</h3>
+<p>The <code>parsers/</code> subpackage provides four functions sharing a uniform <code>input → list[dict]</code> contract. Each emits study-level claims directly consumable by <code>enrich_claim</code>:</p>
+<ul>
+  <li><code>parse_geo_soft(text)</code>. GEO SOFT format. Tokenises <code>^TYPE = id</code> records and <code>!field = value</code> lines, walks <code>^SERIES</code> and <code>^SAMPLE</code> records, emits <code>consolidates_dataset</code> per sample id, deduplicated <code>sequenced_on</code> per instrument model, and <code>uses_database PubMed:{id}</code> when the PubMed reference is set.</li>
+  <li><code>parse_ena_xml(xml_text)</code>. ENA / SRA XML. Walks <code>EXPERIMENT</code> elements, links to <code>STUDY_REF</code>, reads the vendor-named child of <code>PLATFORM</code> for <code>INSTRUMENT_MODEL</code>.</li>
+  <li><code>parse_biostudies_json(text_or_obj)</code>. BioStudies JSON. Flattens the <code>section.attributes</code> tree into a name to value dict, emits study-level claims under the document <code>accno</code>.</li>
+  <li><code>parse_isa_tab(directory)</code>. ISA-Tab investigation, study, assay bundle. Reads <code>i_*.txt</code> for <code>Study Identifier</code> and <code>Study PubMed ID</code>, walks <code>s_*.txt</code> and <code>a_*.txt</code> for organism and instrument-model columns.</li>
+</ul>
+<p>Each parser detects a recognised organism name in the relevant field and propagates a <code>species</code> hint on every emitted claim, so the gene resolver picks the correct organism downstream without depending on symbol casing.</p>
+</section>
+
+<section id="timeline">
+<h2>5. Release timeline (v0.4.0 → v0.11.0)</h2>
+<table>
+<tr><th>Version</th><th>Theme</th><th>Net addition</th></tr>
+<tr><td>v0.4.0</td><td>Qualifier-aware resolution</td><td>Resolver dispatcher in <code>bulk.py</code>; symmetric refactor in <code>singlecell.py</code>; gene resolver wired into single-cell.</td></tr>
+<tr><td>v0.5.0</td><td>Cell Ontology + cascade fixes</td><td>35 CL entries (incl. <em>cnidocyte</em>). Label-first cascade refinement (macrophage / plasmatocyte). <code>exact_synonyms</code> field-name fix.</td></tr>
+<tr><td>v0.6.0</td><td>Mouse (MGI) + species-aware lookup</td><td>75,250 mouse rows. Optional <code>species</code> claim hint, casing heuristic, cross-listed fallback.</td></tr>
+<tr><td>v0.6.1</td><td>Mouse cross-references</td><td>Ensembl (85%), Entrez (60%), UniProt (31%) from three MGI report files.</td></tr>
+<tr><td>v0.6.2</td><td>Drosophila, C. elegans, zebrafish</td><td>126,569 rows across three organisms via NCBI gene_info. <code>xxx-N</code> casing rule.</td></tr>
+<tr><td>v0.6.3</td><td>UniProt for new species</td><td>UniProt per-organism idmapping joins; 55% / 43% / 39% coverage respectively.</td></tr>
+<tr><td>v0.7.0</td><td>Metadata parsers</td><td>Four parsers (GEO SOFT, ENA XML, BioStudies JSON, ISA-Tab). Each propagates a species hint.</td></tr>
+<tr><td>v0.8.0</td><td>Top-7 OLS4 ontology indexes</td><td>154 entries from an OLS4 catalogue audit (280 ontologies): ChEBI, HP, MP, DOID, PR, OBA, ENVO.</td></tr>
+<tr><td>v0.9.0</td><td>Broader ontology coverage</td><td>201 entries: PSI-MS, UO, PSI-MOD, FBbt, WBbt, ZFA, EMAPA, XPO. EC / RXNO / HCAO / ZP deferred for lack of usable labels in OLS4.</td></tr>
+<tr><td>v0.10.0</td><td>Integration smoke tests</td><td>Protocol-conformance suite (15 parametrised tests). <code>examples/quickstart.py</code>. Minimum-viable <code>examples/test_on_papers.py</code>.</td></tr>
+<tr><td>v0.11.0</td><td>Real-corpus smoke test</td><td>16-paper diverse corpus, 45 claims, 98% enrichment, 18 distinct ontologies fired, SHACL conforms.</td></tr>
+</table>
+</section>
+
+<section id="results">
+<h2>6. Results</h2>
+
+<h3>6.1 Test corpus composition</h3>
+<p>The 16-paper end-to-end corpus, hand-curated from PDF text-mining and PubMed efetch abstracts, covers six organisms and four modalities (bulk RNA-seq, single-cell RNA-seq, spatial transcriptomics, long-read RNA-seq), plus four methodology reviews.</p>
+<table>
+<tr><th>Paper</th><th>Organism</th><th>Modality</th><th>Verified accession</th></tr>
+<tr><td>Warner et al. 2025</td><td>N. vectensis</td><td>bulk regeneration</td><td>GSE168938</td></tr>
+<tr><td>Cheung et al. 2024</td><td>N. vectensis</td><td>spatial Tomo-seq</td><td>(spatial-coord-based)</td></tr>
+<tr><td>Sebé-Pedrós et al. 2018</td><td>N. vectensis</td><td>scRNA atlas</td><td>GSE95723</td></tr>
+<tr><td>Layden et al. 2016</td><td>N. vectensis</td><td>microarray</td><td>E-MTAB-4831</td></tr>
+<tr><td>Tabula Muris 2018</td><td>mouse</td><td>scRNA atlas</td><td>GSE109774</td></tr>
+<tr><td>Tabula Sapiens 2022</td><td>human</td><td>scRNA atlas</td><td>GSE201333</td></tr>
+<tr><td>Brunet Avalos et al. 2019</td><td>D. melanogaster</td><td>scRNA brain</td><td>GSE134722</td></tr>
+<tr><td>Packer et al. 2019</td><td>C. elegans</td><td>scRNA embryogenesis</td><td>GSE126954</td></tr>
+<tr><td>Wagner et al. 2018</td><td>zebrafish</td><td>scRNA embryo</td><td>GSE112294</td></tr>
+<tr><td>Tirosh et al. 2016</td><td>human (melanoma)</td><td>scRNA cancer</td><td>GSE72056</td></tr>
+<tr><td>Stickels et al. 2021 (Slide-seqV2)</td><td>mouse</td><td>spatial method</td><td>(method paper)</td></tr>
+<tr><td>Pardo-Palacios et al. 2024 (LRGASP)</td><td>multi</td><td>long-read benchmark</td><td>GSE185917</td></tr>
+<tr><td>Conesa et al. 2016 (review)</td><td>n/a</td><td>bulk best practices</td><td>PMID:26813401</td></tr>
+<tr><td>Hwang et al. 2018 (review)</td><td>n/a</td><td>scRNA-seq pipelines</td><td>PMID:30089861</td></tr>
+<tr><td>Marx 2021 (review)</td><td>n/a</td><td>spatial Method of the Year</td><td>PMID:33408395</td></tr>
+<tr><td>Stark et al. 2019 (review)</td><td>n/a</td><td>RNA-seq teenage years</td><td>PMID:31341269</td></tr>
+</table>
+
+<h3>6.2 Coverage matrix</h3>
+<p>Running <code>examples/test_on_papers.py</code> against this corpus yields the following coverage matrix. Each row is a CURIE prefix; the count is the number of slot-level resolutions that hit that prefix across the 45 claims.</p>
+<table>
+<tr><th>Prefix</th><th>Count</th><th>Source</th></tr>
+<tr><td>EFO</td><td class="num">15</td><td>Platforms (NovaSeq, NextSeq, HiSeq), protocols (Smart-seq2, Drop-seq, MARS-seq, Slide-seq, Visium).</td></tr>
+<tr><td>GEO</td><td class="num">9</td><td>Study accessions (GSE...).</td></tr>
+<tr><td>HGNC</td><td class="num">6</td><td>Human gene symbols.</td></tr>
+<tr><td>biotools</td><td class="num">5</td><td>STAR, DESeq2, minimap2, Seurat, others.</td></tr>
+<tr><td>NCIT</td><td class="num">5</td><td>Analysis concepts (fold change, t-Test, Wilcoxon, Bulk RNA Sequencing, SMRT Sequencing, Nanopore Sequencing).</td></tr>
+<tr><td>WBbt</td><td class="num">3</td><td>C. elegans anatomy (body wall muscle, germ line, pharynx).</td></tr>
+<tr><td>CHEBI</td><td class="num">2</td><td>U0126 (MEK inhibitor), used in two papers.</td></tr>
+<tr><td>CL</td><td class="num">2</td><td>Cnidocyte, T cell.</td></tr>
+<tr><td>UBERON</td><td class="num">2</td><td>Mesentery, pharynx.</td></tr>
+<tr><td>MGI</td><td class="num">2</td><td>Mouse Mapk1, Cd3e.</td></tr>
+<tr><td>ZFA</td><td class="num">2</td><td>Zebrafish notochord, neural tube.</td></tr>
+<tr><td>FlyBase</td><td class="num">2</td><td>Drosophila dpp, eve.</td></tr>
+<tr><td>WormBase</td><td class="num">2</td><td>C. elegans unc-22, daf-16.</td></tr>
+<tr><td>ZFIN</td><td class="num">2</td><td>Zebrafish sox2, tncb.</td></tr>
+<tr><td>DOID</td><td class="num">2</td><td>Melanoma (Tirosh 2016 clinical claim).</td></tr>
+<tr><td>ArrayExpress</td><td class="num">1</td><td>E-MTAB-4831 (Layden 2016 microarray).</td></tr>
+<tr><td>FBbt</td><td class="num">1</td><td>Drosophila wing disc.</td></tr>
+<tr><td>EMAPA</td><td class="num">1</td><td>Mouse developmental anatomy (intestine).</td></tr>
+</table>
+<div class="success">
+<strong>Summary.</strong> 44 of 45 claims enriched (97.8%). 18 distinct CURIE prefixes fired across the corpus. SHACL validation conforms on the 116-triple synthesised RDF data graph.
+</div>
+
+<h3>6.3 Test suite</h3>
+<table>
+<tr><th>Suite</th><th>Tests</th><th>Notes</th></tr>
+<tr><td><code>test_bulk.py</code></td><td>~80</td><td>BulkTranscriptomicsAdapter behaviour, gene index, concept index per source, qualifier-aware resolution, accession patterns.</td></tr>
+<tr><td><code>test_singlecell.py</code></td><td>~15</td><td>SingleCellTranscriptomicsAdapter behaviour, anatomy index, gene resolver in single-cell, cnidarian terms guard.</td></tr>
+<tr><td><code>test_composition.py</code></td><td>4</td><td>Disjoint qualifier sets across siblings; entry-point discoverability; composed adapter union semantics.</td></tr>
+<tr><td><code>test_parsers.py</code></td><td>12</td><td>One per parser plus end-to-end through enrich_claim for GEO SOFT.</td></tr>
+<tr><td><code>test_protocol_conformance.py</code></td><td>15</td><td>Protocol conformance, snake_case qualifiers, kebab-case domain_id, IRI prefix-map validity, SHACL NodeShape presence.</td></tr>
+<tr><td colspan="2"><strong>Total</strong></td><td>126 passing, 92.35% coverage.</td></tr>
+</table>
+</section>
+
+<section id="limitations">
+<h2>7. Limitations</h2>
+
+<h3>7.1 Cross-organism anatomy collisions</h3>
+<p>Some anatomical terms appear in multiple species-specific anatomies (for example, <em>somite</em> in both EMAPA and ZFA). The loader's priority ladder loads EMAPA before ZFA, so a bare <em>somite</em> claim resolves to the mouse entry. A qualifier-aware species priority for anatomy, analogous to what is already done for gene resolution, would address this. It is deferred to a future release as the workaround (pass <code>species</code> hint) suffices in practice.</p>
+
+<h3>7.2 Ontologies with poor OLS4 fit</h3>
+<p>Four ontologies from the v0.8.0 audit short-list were deferred at v0.9.0 due to label-availability issues, each documented in <code>data/build_extra_ontology_indexes.py</code>:</p>
+<ul>
+  <li><strong>EC</strong>. The OLS4 <code>ec</code> ontology re-exports GO molecular-function terms without human-readable labels. Cascade label-matching cannot catch common enzyme class names. Future versions can wire ExPASy <code>enzyme.dat</code> directly.</li>
+  <li><strong>RXNO</strong>. Dominated by CHEBI and BFO imports without named reaction labels.</li>
+  <li><strong>HCAO</strong>. Re-publishes CARO, CL, CLO and GO terms. Redundant with the existing CL index.</li>
+  <li><strong>ZP</strong>. Labels follow a peculiar <code>&lt;entity&gt; abnormal, abnormal</code> pattern that does not match the natural-language <code>abnormal &lt;entity&gt;</code> form of harvest candidates. A pattern-aware harvester is needed.</li>
+</ul>
+
+<h3>7.3 Protein Ontology generic-candidate quirks</h3>
+<p>The PR harvest at v0.8.0 contains valid CURIEs that are not always the most canonical: <code>transcription factor</code> resolves to a specific Sp-family transcription factor, <code>actin</code> to <em>actin (yeast)</em>. The label-first cascade refinement could be extended to prefer the shortest label among label-matches; this is queued for a future PR-targeted refinement.</p>
+
+<h3>7.4 Instrument full-name extensions</h3>
+<p>The corpus index has bare instrument-series entries (<em>NovaSeq</em>, <em>HiSeq</em>, <em>NextSeq</em>) that match substring. Full product names with model numbers (<em>Illumina HiSeq 2500</em>, <em>Illumina NextSeq 500</em>) do not exact-match. Either the corpus index can grow with more variants, or upstream LLM extractors can normalise to bare series names.</p>
+
+<h3>7.5 Single bio.tools miss</h3>
+<p><code>scVI</code> is not registered in bio.tools under that name, leading to consistent unresolved claims in scRNA-seq papers that use the tool. Adding a direct-ID attempt for the canonical <code>scvi-tools</code> identifier is a one-line fix queued for the next bio.tools harvest refresh.</p>
+</section>
+
+<section id="future">
+<h2>8. Future work</h2>
+<p>Three threads remain open beyond the v0.11.0 baseline:</p>
+<ol>
+  <li><strong>Real-world benchmark on the ASB pipeline.</strong> The 16-paper hand-curated corpus exercises the adapter's resolution paths end to end, but the next milestone is integration with the ASB LLM extraction stage in the laboratory's downstream infrastructure. The coverage matrix from v0.11.0 provides the baseline against which extraction-stage misses can be diagnosed.</li>
+  <li><strong>Niche ontology additions.</strong> The remaining 21 candidates from the v0.8.0 OLS4 audit (BTO, OGSF, CMPO, MAXO, OMIT, NBO, MEDDRA and others) can be added incrementally as benchmark output surfaces missing terms. The infrastructure is in place; the cost per addition is approximately one hour.</li>
+  <li><strong>SHACL pipeline shapes.</strong> The current shapes graph validates CURIE format only. Class-level shapes for SO, UBERON, CL, EFO would add semantic validation. Such shapes typically live in the consuming graph store rather than in the adapter itself, but the contract for what the adapter emits could be made stricter.</li>
+</ol>
+</section>
+
+<section id="references">
+<h2>9. References</h2>
+
+<h3>9.1 Primary papers in the corpus</h3>
+<ul class="refs">
+  <li>Warner JF, et al. 2025. <em>Nematostella vectensis</em> regeneration time course. GEO: GSE168938.</li>
+  <li>Cheung K, et al. 2024. Tomo-seq spatial transcriptomics of <em>Nematostella vectensis</em>. <em>Developmental Cell</em>.</li>
+  <li>Sebé-Pedrós A, et al. 2018. Cnidarian cell type diversity from whole-organism single-cell RNA-seq. <em>Cell</em>. PMID: 29856953.</li>
+  <li>Layden MJ, et al. 2016. MAPK signaling and neurogenesis in <em>Nematostella vectensis</em>. <em>BMC Biology</em>.</li>
+  <li>Tabula Muris Consortium. 2018. <em>Nature</em>. PMID: 30283141.</li>
+  <li>Tabula Sapiens Consortium. 2022. <em>Science</em>. PMID: 35549404.</li>
+  <li>Brunet Avalos C, et al. 2019. <em>Drosophila</em> larval brain single-cell transcriptome atlas. <em>eLife</em>. PMID: 31746739.</li>
+  <li>Packer JS, et al. 2019. Lineage-resolved <em>C. elegans</em> embryogenesis atlas. <em>Science</em>. PMID: 31488706.</li>
+  <li>Wagner DE, et al. 2018. Zebrafish embryo single-cell mapping. <em>Science</em>. PMID: 29700227.</li>
+  <li>Tirosh I, et al. 2016. Single-cell RNA-seq of metastatic melanoma. <em>Science</em>.</li>
+  <li>Stickels RR, et al. 2021. Slide-seqV2. <em>Nature Biotechnology</em>. PMID: 33288904.</li>
+  <li>Pardo-Palacios FJ, et al. 2024. LRGASP long-read benchmark. <em>Nature Methods</em>. PMID: 38849572.</li>
+  <li>Conesa A, et al. 2016. A survey of best practices for RNA-seq data analysis. <em>Genome Biology</em>. PMID: 26813401.</li>
+  <li>Hwang B, et al. 2018. Single-cell RNA sequencing technologies and bioinformatics pipelines. <em>Experimental and Molecular Medicine</em>. PMID: 30089861.</li>
+  <li>Marx V. 2021. Method of the Year: spatially resolved transcriptomics. <em>Nature Methods</em>. PMID: 33408395.</li>
+  <li>Stark R, et al. 2019. RNA sequencing: the teenage years. <em>Nature Reviews Genetics</em>. PMID: 31341269.</li>
+</ul>
+
+<h3>9.2 Ontologies and registries</h3>
+<ul class="refs">
+  <li>HGNC, HUGO Gene Nomenclature Committee. <a href="https://www.genenames.org/">genenames.org</a>.</li>
+  <li>MGI, Mouse Genome Informatics. <a href="https://www.informatics.jax.org/">informatics.jax.org</a>.</li>
+  <li>FlyBase. <a href="https://flybase.org/">flybase.org</a>.</li>
+  <li>WormBase. <a href="https://wormbase.org/">wormbase.org</a>.</li>
+  <li>ZFIN, Zebrafish Information Network.</li>
+  <li>UBERON, Uber-anatomy ontology.</li>
+  <li>CL, Cell Ontology.</li>
+  <li>EFO, Experimental Factor Ontology.</li>
+  <li>OBI, Ontology for Biomedical Investigations.</li>
+  <li>NCIT, NCI Thesaurus.</li>
+  <li>STATO, Statistical Methods Ontology.</li>
+  <li>ChEBI, Chemical Entities of Biological Interest.</li>
+  <li>HP, Human Phenotype Ontology.</li>
+  <li>MP, Mammalian Phenotype Ontology.</li>
+  <li>DOID, Disease Ontology.</li>
+  <li>PR, Protein Ontology.</li>
+  <li>OBA, Ontology of Biological Attributes.</li>
+  <li>ENVO, Environment Ontology.</li>
+  <li>PSI-MS, Mass Spectrometry ontology.</li>
+  <li>UO, Units of Measurement Ontology.</li>
+  <li>PSI-MOD, Protein Modifications.</li>
+  <li>FBbt, Drosophila gross anatomy.</li>
+  <li>WBbt, C. elegans gross anatomy.</li>
+  <li>ZFA, Zebrafish anatomy.</li>
+  <li>EMAPA, Mouse Developmental Anatomy.</li>
+  <li>XPO, Xenopus Phenotype Ontology.</li>
+  <li>bio.tools registry. <a href="https://bio.tools/">bio.tools</a>.</li>
+  <li>EBI Ontology Lookup Service (OLS4). <a href="https://www.ebi.ac.uk/ols4/">ebi.ac.uk/ols4</a>.</li>
+</ul>
+
+<h3>9.3 Framework and methodology</h3>
+<ul class="refs">
+  <li>The indicium core and ASB framework (internal, HolobiomicsLab).</li>
+  <li>Sibling adapter: indicium-adapters-epigenomics (reference for v0.10 conformance pattern).</li>
+  <li>G2V2 cross-reference table for <em>Nematostella vectensis</em> (Boukhajou 2026 internal).</li>
+  <li>Shapes Constraint Language (SHACL), W3C Recommendation.</li>
+  <li>Bucur et al., Claim / Evidence / Source SuperPattern (provenance modelling).</li>
+</ul>
+</section>
+
+<footer>
+  <p>indicium-adapters-transcriptomics v0.11.0. Generated 2026-05-28. MIT License.</p>
+</footer>
+
+</body>
+</html>

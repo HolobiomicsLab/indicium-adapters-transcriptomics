@@ -28,9 +28,10 @@ def test_domain_ids_are_distinct():
 
 
 def test_qualifier_sets_are_disjoint():
-    """Required by the indicium-adapters composition contract — overlap would
+    """Required by the indicium-adapters composition contract. Overlap would
     break ``compose_adapters`` ordering guarantees and confuse Perspicacité's
-    extraction prompt."""
+    extraction prompt (it consumes ``extraction_context()`` to constrain
+    LLM claim extraction)."""
     overlap = (
         BulkTranscriptomicsAdapter.qualifiers
         & SingleCellTranscriptomicsAdapter.qualifiers

@@ -2,103 +2,65 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.9.0 ships two sibling adapters + a `parsers/` subpackage + a
-multi-ontology concept index (19 source TSVs covering ~447 verified
-CURIEs across the transcriptomics-relevant ontology landscape):
+## What this does
 
-- **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
-  expression claims plus study-level assay metadata. Resolves repository
-  accessions (GEO / SRA / ENA / ArrayExpress / ENCODE / BioProject / dbGaP /
-  BioStudies) and gene names from a bundled comprehensive
-  **multi-species** index (**~255,000 entries** as of v0.6.2):
-  - **Human** (HGNC, ~40k) cross-referenced with the
-    *Nematostella vectensis* G2V2 mapping (JGI Nemve1 + NvERTx +
-    NVE + Nv2g + UniProt).
-  - **Mouse** (MGI complete set, ~75k) with Ensembl / Entrez /
-    UniProt cross-refs from MGI's report files (v0.6.1).
-  - **Drosophila** (FlyBase, ~25k), **C. elegans** (WormBase,
-    ~47k), **Zebrafish** (ZFIN, ~55k) from NCBI's per-organism
-    gene_info files (v0.6.2).
+This package lifts free-text transcriptomics mentions in ASB claims to canonical CURIEs.
 
-  Symbol-level collisions (``MAPK1`` ↔ ``Mapk1`` ↔ ``mapk1`` ↔
-  ``Mapk``) are disambiguated by an optional ``species`` claim hint
-  (``"human"`` / ``"mouse"`` / ``"drosophila"`` / ``"celegans"`` /
-  ``"zebrafish"`` / ``"nematostella"``) or a casing heuristic
-  (UPPER → human, Title-case → mouse, ``xxx-N`` → C. elegans).
-  Direct accession lookups (HGNC, MGI, FlyBase, WormBase, ZFIN,
-  Nemve1, UniProt) bypass the disambiguation entirely.
-- **`SingleCellTranscriptomicsAdapter`** — cell-resolution claims (cell-type
-  markers, cluster enrichment, spatial localisation). Ships a small bundled
-  UBERON anatomy index for the spatial-localisation qualifiers
-  (`localized_in_tissue`, `localized_in_spatial_domain`), anchored on the
-  Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
-  enrichment via the Cell Ontology (CL) shipped in v0.5.0.
+A claim arrives from the upstream LLM extractor (Perspicacité) as a `(subject, qualifier, object)` triple where subject and object are typically raw strings (`"WNT4"`, `"GSE168938"`, `"STAR"`, `"mesentery"`). This package resolves those strings to ontology CURIEs (`HGNC:12783`, `GEO:GSE168938`, `biotools:star`, `UBERON:0002095`) so downstream RDF storage and SPARQL querying are stable.
 
-The **`parsers/`** subpackage (v0.7.0) turns repository-metadata
-documents into claim dicts ready for `enrich_claim`. Four parsers
-share the same `input → list[dict]` contract:
+The package is a pure-function claim enricher. It does no LLM extraction, makes no network calls at enrichment time, and ships every reference table (gene symbols, anatomy, concepts) as bundled package resources regenerated offline by maintainer scripts.
 
-- `parse_geo_soft(text)` — GEO SOFT format
-- `parse_ena_xml(xml_text)` — ENA / SRA XML
-- `parse_biostudies_json(text_or_obj)` — BioStudies JSON
-- `parse_isa_tab(directory)` — ISA-Tab investigation/study/assay bundle
+## When to use which adapter
 
-Each detects a recognised organism in the metadata and attaches a
-`species` hint to every emitted claim, so the downstream gene
-resolver picks the right organism without re-deriving it from the
-symbol casing.
+| Use the bulk adapter when... | Use the single-cell adapter when... |
+|---|---|
+| The claim is about a gene, transcript, or set at the study level | The claim only makes sense with per-cell or per-spot resolution |
+| You're describing assay metadata (platform, aligner, DE tool, accession) | You're describing a cell-type marker, cluster enrichment, or spatial localisation |
+| Qualifier is `differentially_expressed_in`, `marker_of`, `sequenced_on`, etc. | Qualifier is `marker_of_cell_type`, `enriched_in_cluster`, `localized_in_tissue`, etc. |
 
-Both adapters also share a **concept index** (v0.3.0 → v0.5.0) — 92+
-verified CURIEs across four sources:
+The two qualifier sets are disjoint by construction (enforced by `tests/test_composition.py`), so a composed adapter via `compose_adapters` produces a clean union with no shadowing.
 
-- **Static (v0.3.0, 31 rows)** — drawn from the TranscriptoKG modelling
-  vocabulary: INO regulation processes, NCIT analysis concepts, GO
-  roots, OBI investigation / role / protocol / DE-transformation /
-  RNA-sequencing, STATO statistical variables. Covers terms like
-  *fold change*, *log2*, *up-regulation*, *RNA sequencing assay*,
-  *multiple comparison adjustment*.
-- **OLS4 corpus-harvested (v0.3.1, 16 rows)** — cascade of three
-  match modes against OLS4, re-verified by IRI lookup:
-  - *exact* (6): `Illumina`, `MARS-seq`, `Smart-seq2`, `Drop-seq`,
-    `Slide-seq`, `t-test`.
-  - *prefix* (6, lets descriptive suffixes through): `Wilcoxon` →
-    Wilcoxon Signed Rank Test, `bulk RNA-seq` → bulk RNA-seq assay,
-    `Visium` → Visium Spatial Gene Expression, `Benjamini-Hochberg`,
-    `PacBio`, `Oxford Nanopore`.
-  - *substring* (4, instrument families): `NovaSeq` → Illumina
-    NovaSeq 6000, `HiSeq`, `NextSeq`, `Sequel`.
-- **bio.tools registry (v0.3.1, 9 rows)** — direct-ID + normalised
-  name search on https://bio.tools/, canonical registry for
-  bioinformatics software: `STAR`, `Bowtie`, `Bowtie2` (matched via
-  whitespace normalisation against bio.tools name "Bowtie 2"),
-  `Minimap2`, `RSEM`, `StringTie`, `DESeq2`, `Seurat`, `Picard`.
-- **Cell Ontology (v0.5.0, 35 rows)** — harvested from the cell-atlas
-  papers in the corpus: `cnidocyte` (CL:0011029 — the Nematostella
-  iconic cell type), `T cell` / `B cell` / `macrophage` / `monocyte` /
-  `neutrophil` / `astrocyte` / `oligodendrocyte` / `fibroblast` /
-  `endothelial cell` / `hepatocyte` / `enterocyte` / `goblet cell`
-  and 23 more. Powers single-cell qualifiers
-  (`marker_of_cell_type`, `enriched_in_cluster`,
-  `co_expressed_in_cell_type`) end-to-end.
+## What it resolves
 
-**v0.4.0 — qualifier-aware resolution priority.** `enrich_claim()`
-picks its resolver chain based on the claim's qualifier:
+**Gene names** across six organisms (254,922 rows total) from HGNC, MGI, FlyBase, WormBase, ZFIN, plus the *Nematostella vectensis* G2V2 cross-reference (JGI Nemve1 + NvERTx + NVE + Nv2g + UniProt). Symbol-level collisions across organisms (`MAPK1` vs `Mapk1` vs `mapk1`) are disambiguated by an optional `species` claim hint or a casing heuristic (UPPERCASE for human, Title-case for mouse, `xxx-N` for *C. elegans*). Direct accession lookups (HGNC, MGI, FlyBase, WormBase, ZFIN, Nemve1, UniProt) bypass the disambiguation.
 
-- Study-level qualifiers (`sequenced_on`, `aligned_with`,
-  `quantified_with`, `normalized_with`, `tested_with`, `uses_database`)
-  use `concept → accession → gene` priority — so a tool name like
-  `STAR` in `aligned_with: <study> STAR` resolves to `biotools:star`
-  (the aligner) rather than `HGNC:11359` (the steroidogenic acute
-  regulatory protein gene with the same symbol).
-- Feature qualifiers (`differentially_expressed_in`, `expressed_in`,
-  `marker_of`, `regulated_by`, etc.) and `consolidates_dataset` keep
-  the default `accession → gene → concept` order — gene mentions
-  dominate feature claims, so gene-lookup wins for collision-prone
-  names.
+**Repository accessions** for GEO, SRA, ENA, ArrayExpress, ENCODE, BioProject, dbGaP, BioStudies.
 
-Both register under the `indicium.adapters` entry-point group and are
-discoverable via `indicium_adapters.discover_adapters()`. Their qualifier sets
-are disjoint by construction (enforced by `tests/test_composition.py`).
+**Anatomy** via a small hand-curated UBERON index, verified at build time with strict label match (no hyponym promotion). Cnidarian-specific terms (*physa*, *mesoglea*, *gastrodermis*) are documented as triaged out because UBERON has no entry for them.
+
+**Concepts** from 19 ontology sources merged into a single index of ~447 verified CURIEs:
+
+| Layer | Sources |
+|---|---|
+| TranscriptoKG modelling vocabulary | INO, NCIT, GO, OBI, STATO |
+| Tool registry | bio.tools (STAR, DESeq2, Seurat, minimap2, ...) |
+| OLS4 corpus harvest | platforms (Illumina, NovaSeq, ...), protocols (Smart-seq2, Visium, ...), stats (Wilcoxon, Benjamini-Hochberg) |
+| Cell types | CL (cnidocyte, T cell, hepatocyte, ...) |
+| Top-7 OLS4 audit picks | ChEBI, HP, MP, DOID, PR, OBA, ENVO |
+| Universal Tier-1 | MS (mass spec), UO (units), MOD (PTMs) |
+| Organism-paired Tier-2 | FBbt, WBbt, ZFA, EMAPA, XPO |
+
+The load order encodes a priority ladder (paper-modelling vocab > OLS4 corpus > bio.tools > single-ontology indexes), so a hypothetical term collision resolves to the most grounded source.
+
+## Qualifier-aware resolution
+
+The `enrich_claim()` method picks its resolver chain based on the claim's qualifier. The motivating example is the `STAR` collision: `STAR` is both a popular aligner (bio.tools) and a gene symbol (HGNC:11359). The adapter routes them differently:
+
+| Qualifier class | Resolver priority | Effect on `STAR` |
+|---|---|---|
+| Study-level (`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`, `tested_with`, `uses_database`) | concept > accession > gene | `STAR` resolves to `biotools:star` |
+| Feature-level (`differentially_expressed_in`, `expressed_in`, `marker_of`, `regulated_by`, `consolidates_dataset`) | accession > gene > concept | `STAR` resolves to `HGNC:11359` |
+
+## Metadata parsers
+
+The `parsers/` subpackage turns repository-metadata documents into claim dicts ready for `enrich_claim`. Four parsers share the same `input -> list[dict]` contract:
+
+- `parse_geo_soft(text)` for GEO SOFT format
+- `parse_ena_xml(xml_text)` for ENA / SRA XML
+- `parse_biostudies_json(text_or_obj)` for BioStudies JSON
+- `parse_isa_tab(directory)` for ISA-Tab investigation / study / assay bundles
+
+Each parser detects a recognised organism in the metadata and attaches a `species` hint to every emitted claim, so the gene resolver picks the right organism without re-deriving it from the symbol casing.
 
 ## Install
 
@@ -106,8 +68,7 @@ are disjoint by construction (enforced by `tests/test_composition.py`).
 pip install indicium-adapters-transcriptomics
 ```
 
-`indicium` and `indicium-adapters` are not on PyPI yet; if installing from
-source, pull them from git first.
+`indicium` and `indicium-adapters` are not on PyPI yet; if installing from source, pull them from git first.
 
 ## Usage
 
@@ -118,7 +79,7 @@ found = discover_adapters()
 bulk = found["bulk-transcriptomics"]
 sc   = found["single-cell-transcriptomics"]
 
-# 1) Repository accession → CURIE
+# 1) Repository accession -> CURIE
 enriched = bulk.enrich_claim({
     "subject": "GSE168938",
     "qualifier": "consolidates_dataset",
@@ -126,7 +87,7 @@ enriched = bulk.enrich_claim({
 })
 # enriched["ontology_terms"]["subject"] == "GEO:GSE168938"
 
-# 2) Gene symbol → HGNC CURIE + full xref map
+# 2) Gene symbol -> HGNC CURIE + full xref map
 enriched = bulk.enrich_claim({
     "subject": "WNT4",
     "qualifier": "regulated_by",
@@ -138,7 +99,7 @@ enriched = bulk.enrich_claim({
 #     "ncbigene": "54361", "uniprot": "P56705",
 # }
 
-# 3) Nematostella Nemve1 / JGI gene-model id → resolved to the human
+# 3) Nematostella Nemve1 / JGI gene-model id resolves to the human
 #    ortholog via the G2V2 cross-reference and the HGNC symbol fallback
 enriched = bulk.enrich_claim({
     "subject": "gw.51.96.1",       # FGF8 in the Nemve1 v1 assembly
@@ -152,7 +113,7 @@ enriched = bulk.enrich_claim({
 #     "nvertx": "NvERTx.4.55830", "uniprot": "Q805B2",
 # }
 
-# 4) SingleCell anatomy → UBERON CURIE
+# 4) Single-cell anatomy -> UBERON CURIE
 enriched = sc.enrich_claim({
     "subject": "MMP9",
     "qualifier": "localized_in_tissue",
@@ -165,7 +126,7 @@ enriched = sc.enrich_claim({
 #     "description": "Anatomical organ component composed of a double layer ...",
 # }
 
-# 5) Analysis-concept term → NCIT / INO / OBI / GO / STATO CURIE
+# 5) Analysis-concept term -> NCIT / INO / OBI / GO / STATO CURIE
 enriched = bulk.enrich_claim({
     "subject": "fold change",
     "qualifier": "tested_with",
@@ -174,9 +135,9 @@ enriched = bulk.enrich_claim({
 # enriched["ontology_terms"]["subject"] == "NCIT:C60693"  (Fold Change)
 # enriched["ontology_terms"]["object"]  == "biotools:deseq2"
 
-# 6) Same name, different qualifier → different CURIE (v0.4.0)
-#    "STAR" is both an aligner (biotools:star) and a gene symbol
-#    (HGNC:11359). The qualifier disambiguates.
+# 6) Same name, different qualifier -> different CURIE.
+#    "STAR" is both an aligner (biotools:star) and a gene (HGNC:11359);
+#    the qualifier disambiguates.
 enriched_aligner = bulk.enrich_claim({
     "subject": "study_42", "qualifier": "aligned_with", "object": "STAR",
 })
@@ -186,34 +147,27 @@ enriched_gene = bulk.enrich_claim({
     "subject": "STAR", "qualifier": "expressed_in", "object": "mesentery",
 })
 # enriched_gene["ontology_terms"]["subject"] == "HGNC:11359"
-# enriched["xrefs"]["object"] == {
-#     "curie": "biotools:deseq2",
-#     "label": "DESeq2",
-#     "ontology": "biotools",
-#     "description": "R/Bioconductor package for differential gene ...",
-# }
 
 # Use both adapters at once via the composition helper
 composite = compose_adapters([bulk, sc])
 ```
 
-The 13 bulk-adapter qualifiers cover both claim-level assertions about
-features (`differentially_expressed_in`, `co_expressed_with`, `enriched_for`,
-`expressed_in`, `marker_of`, `regulated_by`) and study-level assay metadata
-(`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`,
-`tested_with`, `uses_database`, `consolidates_dataset`).
+The 13 bulk-adapter qualifiers cover claim-level feature assertions (`differentially_expressed_in`, `co_expressed_with`, `enriched_for`, `expressed_in`, `marker_of`, `regulated_by`) and study-level assay metadata (`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`, `tested_with`, `uses_database`, `consolidates_dataset`).
 
-The 5 single-cell-adapter qualifiers cover cell-resolution claims
-(`marker_of_cell_type`, `enriched_in_cluster`, `co_expressed_in_cell_type`,
-`localized_in_tissue`, `localized_in_spatial_domain`) — assertions that only
-make sense once you have per-cell or per-spot resolution.
+The 5 single-cell-adapter qualifiers (`marker_of_cell_type`, `enriched_in_cluster`, `co_expressed_in_cell_type`, `localized_in_tissue`, `localized_in_spatial_domain`) cover assertions that only make sense at per-cell or per-spot resolution.
 
 ## SHACL shapes
 
-Both adapters' `shacl_shapes()` return an `rdflib.Graph` with a NodeShape that
-validates CURIE format on ASB `Claim` graphs. Pipeline-level RDF validation
-for transcriptomics workflow classes (SO / UBERON / CL / EFO shapes) lives
-upstream in the consuming graph store, not here.
+Both adapters' `shacl_shapes()` return an `rdflib.Graph` with a NodeShape that validates CURIE format on ASB `Claim` graphs. Pipeline-level RDF validation for transcriptomics workflow classes (SO, UBERON, CL, EFO shapes) lives upstream in the consuming graph store, not here.
+
+## Validation
+
+The package ships with two runnable demonstrations under `examples/`:
+
+- `examples/quickstart.py`: 30-line bring-up smoke test (discover, enrich one claim per adapter, validate SHACL shapes parse).
+- `examples/test_on_papers.py`: end-to-end test on a 16-paper hand-curated corpus (45 claims spanning six organisms across bulk, single-cell, spatial and long-read modalities, plus four methodology reviews). 44/45 enriched (98%), 18 distinct ontologies firing, SHACL conformance.
+
+`REPORT.html` at the project root documents the full development history (architecture, data sources, resolution methods, release timeline, results, limitations).
 
 ## Development
 
@@ -224,9 +178,8 @@ pip install -e .[dev]
 pytest
 ```
 
-See `CLAUDE.md` for the dev guide and the 4-quadrant filter used to decide
-whether a feature belongs in this adapter at all.
+See `CLAUDE.md` for the developer guide and the 4-quadrant filter that decides whether a feature belongs in this adapter at all. See `CHANGELOG.md` for the release-by-release history.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT, see `LICENSE`.
