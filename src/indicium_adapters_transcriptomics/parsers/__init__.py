@@ -1,21 +1,20 @@
-"""Repository-metadata parsers (v0.7.0).
+"""Repository-metadata parsers (added in v0.7.0).
 
-Each parser takes a raw metadata source (a GEO SOFT text dump, an ENA
-XML response, a BioStudies JSON document, an ISA-Tab directory) and
-returns a list of **claim dicts** in the shape consumed by
-``BulkTranscriptomicsAdapter.enrich_claim`` /
-``SingleCellTranscriptomicsAdapter.enrich_claim``.
+Each parser takes a raw metadata source (a GEO SOFT text dump, an ENA XML
+response, a BioStudies JSON document, an ISA-Tab directory) and returns a
+list of claim dicts ready for ``BulkTranscriptomicsAdapter.enrich_claim``
+or ``SingleCellTranscriptomicsAdapter.enrich_claim``.
 
-The parsers extract **study-level** assertions only (which platform was
-used, which dataset is consolidated, which organism the samples came
-from, etc.). Feature-level claims (``differentially_expressed_in`` /
-``marker_of`` / ...) require the actual count tables and DEG outputs —
-those stay the responsibility of the upstream LLM extractor.
+The parsers only extract study-level assertions: which platform was used,
+which dataset is consolidated, which organism the samples came from, and
+so on. Feature-level claims (``differentially_expressed_in``,
+``marker_of``, etc.) need the actual count tables and DEG outputs, which
+stay the responsibility of the upstream LLM extractor.
 
-Each parser is intentionally minimum-viable in v0.7.0: it covers the
-fields most commonly populated in real metadata, ignores the rest, and
-emits a small handful of claims per record. v0.7.x follow-ups can
-deepen field coverage when a real use-case demands it.
+Each parser is minimum-viable: it covers the fields most commonly populated
+in real metadata, ignores the rest, and emits a small handful of claims
+per record. Later releases can deepen field coverage when a real use-case
+calls for it.
 
 Usage::
 

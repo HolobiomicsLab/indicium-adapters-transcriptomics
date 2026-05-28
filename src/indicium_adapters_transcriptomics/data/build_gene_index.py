@@ -1,10 +1,10 @@
-"""Maintainer script — regenerate the bundled ``gene_index.tsv``.
+"""Maintainer script, regenerate the bundled ``gene_index.tsv``.
 
 Joins three authoritative sources:
 
 * The **G2V2 cross-reference table** (Nematostella vectensis).
 * The **HGNC complete set** (HUGO Gene Nomenclature Committee, human).
-* The **MGI marker list** (Mouse Genome Informatics, MRK_List2.rpt) —
+* The **MGI marker list** (Mouse Genome Informatics, MRK_List2.rpt),
   added in v0.6.0 to give Tabula Muris-style mouse claims a path to
   resolution.
 
@@ -18,7 +18,7 @@ hint on the claim, and a casing heuristic infers species from the
 term itself (UPPER → human, Title-case → mouse) when no hint is
 given. Disambiguation rule lives in ``GeneIndex.lookup``.
 
-Usage (maintainer-only — not run at install or import time)::
+Usage (maintainer-only, not run at install or import time)::
 
     python -m indicium_adapters_transcriptomics.data.build_gene_index \\
         --g2v2-xlsx /path/to/G2V2_*.xlsx \\
@@ -117,7 +117,7 @@ _SPECIES_ORG_COLUMN: dict[str, str] = {
 
 # Prefixes in dbXrefs to extract organism-specific gene IDs. Keys are
 # the species tag, values are the dbXrefs prefix (uppercase or
-# Camel-cased as NCBI writes them — checked case-insensitively).
+# Camel-cased as NCBI writes them, checked case-insensitively).
 _SPECIES_ORG_DBXREF_PREFIXES: dict[str, tuple[str, ...]] = {
     "drosophila": ("FLYBASE",),
     "celegans":   ("WormBase",),
@@ -126,7 +126,7 @@ _SPECIES_ORG_DBXREF_PREFIXES: dict[str, tuple[str, ...]] = {
 
 # MGI cross-reference reports (v0.6.1). All three are header-less,
 # tab-separated, positional. Schemas read from sampled rows on the
-# upstream pages — re-verify if MGI ever changes their report layout.
+# upstream pages, re-verify if MGI ever changes their report layout.
 MGI_ENSEMBL_URL = (
     "https://www.informatics.jax.org/downloads/reports/MRK_ENSEMBL.rpt"
 )
@@ -391,7 +391,7 @@ def _load_mgi(path: Path) -> list[dict[str, str]]:
     markers, RIKEN cDNAs without a stable gene status, etc. Returned
     rows carry the minimum fields needed by the bundled TSV
     (``symbol``, ``mgi``, ``name``); ``ensembl`` / ``ncbigene`` /
-    ``uniprot`` cross-refs are left empty in v0.6.0 — they live in
+    ``uniprot`` cross-refs are left empty in v0.6.0, they live in
     different MGI report files (MRK_ENSEMBL / MGI_EntrezGene /
     MRK_SwissProt) and integrating those is on the v0.6.1 roadmap.
     """
@@ -438,10 +438,10 @@ def _load_hgnc(
 ]:
     """Return three views of the HGNC complete set:
 
-    * ``by_uniprot``  — UniProt accession → HGNC row
-    * ``by_symbol``   — UPPER-cased HGNC symbol → HGNC row (case-insensitive
+    * ``by_uniprot`` , UniProt accession → HGNC row
+    * ``by_symbol``  , UPPER-cased HGNC symbol → HGNC row (case-insensitive
       fallback when no UniProt accession matched)
-    * ``all_rows``    — every HGNC row, used to emit pure-human rows for genes
+    * ``all_rows``   , every HGNC row, used to emit pure-human rows for genes
       that don't appear in G2V2
 
     The returned row dicts use the runtime-TSV column names so the writer can
@@ -496,7 +496,7 @@ def build(
 ) -> int:
     """Read G2V2 + HGNC + MGI, join, emit the bundled TSV. Return row count.
 
-    Output composition (in this load order — affects ``GeneIndex.lookup``
+    Output composition (in this load order, affects ``GeneIndex.lookup``
     fallback ordering):
 
     1. One row per de-duplicated G2V2 Nematostella gene
@@ -522,7 +522,7 @@ def build(
         w = csv.DictWriter(fh, fieldnames=OUT_COLUMNS, delimiter="\t")
         w.writeheader()
 
-        # Step 1 — Nematostella-anchored rows.
+        # Step 1, Nematostella-anchored rows.
         for _, r in g2v2.iterrows():
             jgi = _first_token(r.get("JGI"))
             nvertx = _first_token(r.get("NvERTx_ID"))
@@ -565,7 +565,7 @@ def build(
             })
             n_nem_total += 1
 
-        # Step 2 — pure-HGNC rows for human genes not yet covered.
+        # Step 2, pure-HGNC rows for human genes not yet covered.
         n_pure_hgnc = 0
         for row in hgnc_all_rows:
             if row["hgnc"] in used_hgnc_ids:
@@ -587,7 +587,7 @@ def build(
             })
             n_pure_hgnc += 1
 
-        # Step 3 — MGI mouse rows (v0.6.0+).
+        # Step 3, MGI mouse rows (v0.6.0+).
         # v0.6.1 enriches each row with Ensembl / Entrez Gene /
         # UniProt cross-references when ``mgi_xrefs`` is provided.
         mgi_rows = _load_mgi(mgi_path)
@@ -623,7 +623,7 @@ def build(
             })
             n_mgi += 1
 
-        # Step 4 — other model organisms (v0.6.2): Drosophila / C. elegans
+        # Step 4, other model organisms (v0.6.2): Drosophila / C. elegans
         # / zebrafish from NCBI gene_info files.
         n_other = {sp: 0 for sp in NCBI_GENE_INFO_URLS}
         n_other_uniprot = {sp: 0 for sp in NCBI_GENE_INFO_URLS}
@@ -709,7 +709,7 @@ def main(argv: list[str] | None = None) -> int:
         default=cache_dir / "MRK_List2.rpt",
         help="Where to cache the downloaded MGI report.",
     )
-    # v0.6.1 — MGI cross-reference reports (Ensembl / Entrez / UniProt).
+    # v0.6.1, MGI cross-reference reports (Ensembl / Entrez / UniProt).
     parser.add_argument(
         "--mgi-ensembl-cache", type=Path,
         default=cache_dir / "MRK_ENSEMBL.rpt",
@@ -730,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip the v0.6.1 mouse Ensembl/Entrez/UniProt xref join "
              "(emits mouse rows with empty xref columns).",
     )
-    # v0.6.2 — other model organisms (Drosophila / C. elegans / Zebrafish).
+    # v0.6.2, other model organisms (Drosophila / C. elegans / Zebrafish).
     parser.add_argument(
         "--drosophila-cache", type=Path,
         default=cache_dir / "Drosophila_melanogaster.gene_info.gz",
@@ -751,7 +751,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip the v0.6.2 Drosophila / C. elegans / zebrafish step "
              "(emits human + mouse + Nematostella only).",
     )
-    # v0.6.3 — UniProt per-organism idmapping for the three new species.
+    # v0.6.3, UniProt per-organism idmapping for the three new species.
     parser.add_argument(
         "--drosophila-uniprot-cache", type=Path,
         default=cache_dir / "DROME_7227_idmapping.dat.gz",

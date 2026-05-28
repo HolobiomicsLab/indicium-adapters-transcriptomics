@@ -1,10 +1,10 @@
-"""Maintainer script — regenerate the bundled ``concept_index.tsv``.
+"""Maintainer script, regenerate the bundled ``concept_index.tsv``.
 
 Verifies a curated list of **analysis-, regulation- and protocol-concept
 CURIEs** against the EBI OLS4 API and writes a TSV with the canonical
 label and definition each ontology ships. The candidate set is drawn
 directly from the ``TranscriptoKG`` mapping & vocabulary work (Boukhajou,
-2026 — every CURIE was already verified against OntoBee on 2026-05-19
+2026, every CURIE was already verified against OntoBee on 2026-05-19
 during the KG-modelling sprint and is reused here for adapter-level
 alignment).
 
@@ -16,7 +16,7 @@ The output schema:
 prefix (``NCIT`` / ``INO`` / ``OBI`` / ``STATO`` / ``GO`` / ``IAO`` /
 ``SIO``) so consumers can filter by axis.
 
-Usage (maintainer-only — not run at install or import time)::
+Usage (maintainer-only, not run at install or import time)::
 
     python -m indicium_adapters_transcriptomics.data.build_concept_index
 
@@ -40,7 +40,7 @@ OUT_COLUMNS = ("term", "curie", "label", "description", "ontology", "source")
 
 class Candidate(NamedTuple):
     curie: str        # e.g. "NCIT:C60693"
-    ontology: str     # OLS4 ontology key — lowercase: "ncit", "ino", "obi", ...
+    ontology: str     # OLS4 ontology key, lowercase: "ncit", "ino", "obi", ...
     source: str       # short string identifying provenance
 
 
@@ -49,16 +49,16 @@ class Candidate(NamedTuple):
 # the build script re-verifies via OLS4 to confirm the term still exists,
 # and fills in canonical label + description at build time.
 CANDIDATES: tuple[Candidate, ...] = (
-    # --- INO — gene expression regulation processes ---
+    # --- INO, gene expression regulation processes ---
     Candidate("INO:0000094", "ino", "TranscriptoKG vocab (up-regulated)"),
     Candidate("INO:0000095", "ino", "TranscriptoKG vocab (down-regulated)"),
-    # --- NCIT — analysis concepts and statistical outcomes ---
+    # --- NCIT, analysis concepts and statistical outcomes ---
     Candidate("NCIT:C60693",  "ncit", "TranscriptoKG vocab (Fold Change)"),
     Candidate("NCIT:C64200",  "ncit", "TranscriptoKG vocab (log2)"),
     Candidate("NCIT:C68568",  "ncit", "TranscriptoKG vocab (Timepoint)"),
     Candidate("NCIT:C82576",  "ncit", "TranscriptoKG vocab (Reference Time Point)"),
     Candidate("NCIT:C201564", "ncit", "TranscriptoKG vocab (Not Significant)"),
-    # --- NCIT — entity types used in TranscriptoKG mapping ---
+    # --- NCIT, entity types used in TranscriptoKG mapping ---
     Candidate("NCIT:C14250",  "ncit", "TranscriptoKG mapping"),
     Candidate("NCIT:C16438",  "ncit", "TranscriptoKG mapping"),
     Candidate("NCIT:C61601",  "ncit", "TranscriptoKG mapping"),
@@ -74,15 +74,15 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate("NCIT:C188840", "ncit", "TranscriptoKG mapping"),
     Candidate("NCIT:C211600", "ncit", "TranscriptoKG mapping"),
     Candidate("NCIT:C213836", "ncit", "TranscriptoKG mapping"),
-    # --- GO — three roots, useful as anchors ---
+    # --- GO, three roots, useful as anchors ---
     Candidate("GO:0003674", "go", "TranscriptoKG mapping (molecular function root)"),
     Candidate("GO:0005575", "go", "TranscriptoKG mapping (cellular component root)"),
     Candidate("GO:0008150", "go", "TranscriptoKG mapping (biological process root)"),
-    # --- OBI — investigation / role / protocol / DE transformation / assay ---
+    # --- OBI, investigation / role / protocol / DE transformation / assay ---
     # OBI:0000249 and OBI:0000650 were originally tagged "assay" and "data set"
     # in the TranscriptoKG vocab, but OLS4 verification (2026-05-27) shows
     # they actually denote "technical replicate role" and "differential
-    # expression analysis data transformation" — both still relevant to the
+    # expression analysis data transformation", both still relevant to the
     # transcriptomics domain so we keep them, but the source notes reflect
     # the OLS4 truth.
     Candidate("OBI:0000066", "obi", "TranscriptoKG mapping (investigation)"),
@@ -90,7 +90,7 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate("OBI:0000272", "obi", "TranscriptoKG mapping (protocol)"),
     Candidate("OBI:0000650", "obi", "TranscriptoKG mapping (DE analysis data transformation)"),
     Candidate("OBI:0001177", "obi", "TranscriptoKG mapping (RNA sequencing assay)"),
-    # --- STATO — statistical method anchor ---
+    # --- STATO, statistical method anchor ---
     Candidate("STATO:0000251", "stato", "TranscriptoKG mapping"),
 )
 
@@ -163,14 +163,14 @@ def build(out_path: Path) -> int:
                 file=sys.stderr,
             )
             info = verify_curie(c, retries=3)
-            # Polite throttle between requests — EBI flapped 503s during
+            # Polite throttle between requests, EBI flapped 503s during
             # the v0.3.0 build.
             time.sleep(0.3)
             if info is None:
                 print("[ols4]   ✗ not found", file=sys.stderr)
                 n_invalid.append(c.curie)
                 continue
-            # The lookup term is the canonical label, lower-cased — that gives
+            # The lookup term is the canonical label, lower-cased, that gives
             # us a stable, OLS4-sourced key (no risk of getting the label
             # wrong by hand).
             term = info["label"].lower()

@@ -1,21 +1,25 @@
-"""End-to-end demonstration of the transcriptomics adapter on a hand-built
-set of Warner2018-flavoured claims.
+"""End-to-end demo of the transcriptomics adapter on a hand-built corpus
+of Warner2018-flavoured claims.
 
-The 12 claims below mimic what an LLM extractor might emit after reading
+The claim list below mimics what an LLM extractor might emit after reading
 Warner et al. 2025 (or the surrounding Nematostella regeneration
-literature). They cover every resolution axis the adapter currently
-supports, so a single run gives a visual smoke test of:
+literature) plus a few cross-species expansions. The set covers every
+resolution axis the adapter currently supports, so a single run gives a
+visual smoke test of:
 
-- gene-symbol resolution (HGNC + Nematostella cross-references)
-- repository-accession resolution (GEO / SRA / ENA / ...)
-- corpus-harvested concept CURIEs (OLS4 platforms / protocols / stats)
-- bio.tools software CURIEs
-- v0.4.0 qualifier-aware priority (STAR-as-aligner vs STAR-as-gene)
-- single-cell UBERON anatomy resolution
-- v0.4.0 single-cell gene resolution (new in v0.4.0)
-- terms deliberately left unenriched (cnidarian anatomy, CL cell types)
+* gene-symbol resolution (HGNC plus Nematostella cross-references)
+* repository-accession resolution (GEO, SRA, ENA, ArrayExpress, ...)
+* corpus-harvested concept CURIEs (OLS4 platforms, protocols, stats)
+* bio.tools software CURIEs
+* qualifier-aware priority (STAR-as-aligner vs STAR-as-gene)
+* single-cell UBERON anatomy resolution
+* single-cell gene resolution
+* multi-organism resolution (mouse, drosophila, C. elegans, zebrafish)
+* per-ontology indexes (ChEBI, HP, DOID, EMAPA, FBbt, MS, MOD)
+* terms intentionally left unenriched (cnidarian anatomy without a
+  UBERON equivalent)
 
-No network calls. No LLM. Self-contained — useful as a confidence check
+No network calls, no LLM, self-contained. Useful as a confidence check
 before integrating the adapter into the ASB pipeline.
 
 Run::
@@ -33,185 +37,189 @@ from indicium_adapters_transcriptomics import (
     SingleCellTranscriptomicsAdapter,
 )
 
+# Force UTF-8 stdout for Windows consoles.
 sys.stdout.reconfigure(encoding="utf-8")
 
 
-# (adapter_name, claim_dict, one-line rationale shown to the reader)
+# Each demo entry is ``(adapter_name, claim_dict, one-line rationale)``.
+# The rationale is printed alongside the result so a reader scanning the
+# output can tell which behaviour each line exercises.
 ClaimSpec = tuple[str, dict, str]
 
 
 CLAIMS: Final[list[ClaimSpec]] = [
-    # --- Bulk: gene resolution ----------------------------------------------
+    # --- Bulk: gene resolution -------------------------------------------
     (
         "bulk",
         {"subject": "WNT4", "qualifier": "differentially_expressed_in",
          "object": "regenerating_oral_pole"},
-        "Gene symbol (subject) → HGNC + xref map",
+        "Gene symbol (subject) resolves to HGNC plus xref map",
     ),
     (
         "bulk",
         {"subject": "MAPK1", "qualifier": "regulated_by",
          "object": "MAP2K1"},
-        "Two gene symbols → both resolve via HGNC",
+        "Two gene symbols, both resolve via HGNC",
     ),
-    # --- Bulk: accession resolution -----------------------------------------
+    # --- Bulk: accession resolution --------------------------------------
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "consolidates_dataset",
          "object": "GSE168938"},
-        "GEO accession → GEO:GSE168938",
+        "GEO accession resolves to GEO:GSE168938",
     ),
-    # --- Bulk: corpus-harvested concept (platform) --------------------------
+    # --- Bulk: corpus-harvested concept (platform) -----------------------
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "sequenced_on",
          "object": "Illumina"},
-        "Platform name → NCIT:C215820 (v0.3.1 corpus harvest)",
+        "Platform name resolves to NCIT:C215820 (OLS4 corpus harvest)",
     ),
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "sequenced_on",
          "object": "NovaSeq"},
-        "Instrument series → EFO:0008637 Illumina NovaSeq 6000 (substring match)",
+        "Instrument series resolves to EFO:0008637 Illumina NovaSeq 6000 (substring match)",
     ),
-    # --- Bulk: qualifier-aware (the STAR collision) -------------------------
+    # --- Bulk: qualifier-aware (the STAR collision) ----------------------
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "aligned_with",
          "object": "STAR"},
-        "v0.4.0 STAR collision: study-level qualifier → biotools:star (aligner)",
+        "STAR under a study-level qualifier resolves to biotools:star (aligner)",
     ),
     (
         "bulk",
         {"subject": "STAR", "qualifier": "expressed_in",
          "object": "regenerating_blastema"},
-        "v0.4.0 STAR collision: feature qualifier → HGNC:11359 (gene)",
+        "STAR under a feature qualifier resolves to HGNC:11359 (gene)",
     ),
-    # --- Bulk: bio.tools + concept index ------------------------------------
+    # --- Bulk: bio.tools + concept index ---------------------------------
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "quantified_with",
          "object": "DESeq2"},
-        "DE tool → biotools:deseq2",
+        "DE tool resolves to biotools:deseq2",
     ),
     (
         "bulk",
         {"subject": "fold change", "qualifier": "tested_with",
          "object": "Wilcoxon"},
-        "Static concept (subject) + corpus stat (object, prefix match)",
+        "Static concept (subject) plus corpus stat (object, prefix match)",
     ),
-    # --- v0.6.0: mouse (MGI) via Tabula Muris-style claim -------------------
+    # --- Mouse (MGI) via Tabula Muris-style claim ------------------------
     (
         "singlecell",
         {"subject": "Foxp3", "qualifier": "marker_of_cell_type",
          "object": "regulatory T cell"},
-        "v0.6.0 mouse: Title-cased Foxp3 → MGI via casing heuristic + Treg → CL",
+        "Mouse: Title-cased Foxp3 resolves to MGI via the casing heuristic; Treg resolves to CL",
     ),
     (
         "bulk",
         {"subject": "Mapk1", "qualifier": "differentially_expressed_in",
          "object": "intestine"},
-        "v0.6.0 mouse via heuristic: Mapk1 → MGI (NOT MAPK1 → HGNC)",
+        "Mouse via heuristic: Mapk1 picks MGI (and NOT MAPK1 picking HGNC)",
     ),
     (
         "bulk",
         {"subject": "MAPK1", "qualifier": "differentially_expressed_in",
          "object": "intestine", "species": "mouse"},
-        "v0.6.0 species hint: explicit override even when symbol is UPPERCASE",
+        "Explicit species hint overrides even when the symbol is UPPERCASE",
     ),
-    # --- v0.8.0: ChEBI / HP / DOID via per-ontology harvested indexes -----
+    # --- ChEBI / HP / DOID via per-ontology harvested indexes -----------
     (
         "bulk",
         {"subject": "study_warner_2025", "qualifier": "tested_with",
          "object": "U0126"},
-        "v0.8.0 ChEBI: U0126 (Warner's MEK inhibitor) → CHEBI:90693",
+        "ChEBI: U0126 (Warner's MEK inhibitor) resolves to CHEBI:90693",
     ),
     (
         "bulk",
         {"subject": "patient_42", "qualifier": "expressed_in",
          "object": "intellectual disability"},
-        "v0.8.0 HP: a clinical phenotype → HP:0001249 (forces species=human)",
+        "HP: a clinical phenotype resolves to HP:0001249 (forces species=human)",
     ),
     (
         "bulk",
         {"subject": "tumor_sample_7", "qualifier": "consolidates_dataset",
          "object": "breast cancer"},
-        "v0.8.0 DOID: a disease label → DOID:1612 (cancer subtype)",
+        "DOID: a disease label resolves to DOID:1612 (cancer subtype)",
     ),
-    # --- v0.9.0: cross-axis multi-ontology coverage -----------------------
+    # --- Cross-axis multi-ontology coverage -----------------------------
     (
         "bulk",
         {"subject": "tabula_muris_study", "qualifier": "expressed_in",
          "object": "limb bud", "species": "mouse"},
-        "v0.9.0 EMAPA: mouse developmental anatomy → EMAPA:35944",
+        "EMAPA: mouse developmental anatomy resolves to EMAPA:35944",
     ),
     (
         "bulk",
         {"subject": "drosophila_study", "qualifier": "expressed_in",
          "object": "wing disc", "species": "drosophila"},
-        "v0.9.0 FBbt: Drosophila imaginal disc → FBbt:00001778",
+        "FBbt: Drosophila imaginal disc resolves to FBbt:00001778",
     ),
     (
         "bulk",
         {"subject": "ms_proteomics_study", "qualifier": "quantified_with",
          "object": "orbitrap"},
-        "v0.9.0 MS: mass spec instrument → MS:1000484",
+        "MS: mass-spectrometry instrument resolves to MS:1000484",
     ),
     (
         "bulk",
         {"subject": "ptm_study", "qualifier": "tested_with",
          "object": "phosphorylated residue"},
-        "v0.9.0 PSI-MOD: PTM class → MOD:00696 (multi-axis coverage)",
+        "PSI-MOD: PTM class resolves to MOD:00696 (multi-axis coverage)",
     ),
-    # --- v0.6.2: Drosophila / C. elegans / Zebrafish -----------------------
+    # --- Drosophila / C. elegans / Zebrafish ----------------------------
     (
         "bulk",
         {"subject": "dpp", "qualifier": "expressed_in",
          "object": "wing_disc"},
-        "v0.6.2 drosophila: dpp (decapentaplegic) → FlyBase, single-candidate path",
+        "Drosophila: dpp (decapentaplegic) resolves to FlyBase, single-candidate path",
     ),
     (
         "bulk",
         {"subject": "unc-22", "qualifier": "marker_of",
          "object": "body_wall_muscle"},
-        "v0.6.2 C. elegans: unc-22 → WormBase via xxx-N heuristic",
+        "C. elegans: unc-22 resolves to WormBase via the xxx-N heuristic",
     ),
     (
         "bulk",
         {"subject": "nanog", "qualifier": "marker_of_cell_type",
          "object": "embryonic_stem_cell", "species": "zebrafish"},
-        "v0.6.2 zebrafish via species hint: nanog → ZFIN "
+        "Zebrafish via species hint: nanog resolves to ZFIN "
         "(no hint would default to human via Nematostella cross-listing)",
     ),
-    # --- Single-cell: anatomy + new gene resolver (v0.4.0) -----------------
+    # --- Single-cell: anatomy plus gene resolver -------------------------
     (
         "singlecell",
         {"subject": "MMP9", "qualifier": "localized_in_tissue",
          "object": "mesentery"},
-        "v0.4.0 single-cell: gene subject (new) + UBERON anatomy object",
+        "Single-cell: gene subject plus UBERON anatomy object",
     ),
     (
         "singlecell",
         {"subject": "WNT4", "qualifier": "marker_of_cell_type",
          "object": "cnidocyte"},
-        "v0.5.0 single-cell: gene subject + CL cell type — both slots fully resolved",
+        "Single-cell: gene subject plus CL cell type, both slots fully resolved",
     ),
-    # --- Single-cell: deliberately unenriched ------------------------------
+    # --- Single-cell: intentionally unenriched --------------------------
     (
         "singlecell",
         {"subject": "MMP14", "qualifier": "localized_in_spatial_domain",
          "object": "physa"},
-        "Subject (gene) resolves; physa stays bare — cnidarian-specific, no UBERON",
+        "Subject (gene) resolves; physa stays bare (cnidarian-specific, no UBERON term)",
     ),
 ]
 
 
 def _format_dict(d: dict) -> str:
+    """Pretty-print a claim dict with sorted keys for stable diffs."""
     return json.dumps(d, indent=2, ensure_ascii=False, sort_keys=True)
 
 
 def _diff_keys(before: dict, after: dict) -> list[str]:
-    """Top-level keys that are new in ``after``."""
+    """Return the top-level keys that ``after`` has but ``before`` lacks."""
     return sorted(set(after.keys()) - set(before.keys()))
 
 
@@ -225,7 +233,7 @@ def main() -> int:
     n_no_change = 0
 
     print("=" * 70)
-    print(f"Transcriptomics adapter end-to-end demo — {len(CLAIMS)} claims")
+    print(f"Transcriptomics adapter end-to-end demo ({len(CLAIMS)} claims)")
     print("=" * 70)
 
     for i, (adapter_name, claim_in, rationale) in enumerate(CLAIMS, start=1):
@@ -241,16 +249,17 @@ def main() -> int:
         else:
             n_no_change += 1
 
-        marker = "✓ enriched" if was_enriched else "○ no enrichment"
+        marker = "[OK] enriched" if was_enriched else "[--] no enrichment"
         print()
-        print(f"[{i:2d}] {adapter_name:10s} {marker:18s} — {rationale}")
+        print(f"[{i:2d}] {adapter_name:10s} {marker:18s}  {rationale}")
         print(f"    IN  : {_format_dict(claim_in)}")
         if was_enriched:
             curies = ", ".join(f"{slot}={c}" for slot, c in added_terms.items())
             print(f"    OUT : ontology_terms[{curies}]")
             xrefs = claim_out.get("xrefs") or {}
             for slot, xref in xrefs.items():
-                # Compress xrefs to the principal id keys for readability.
+                # Compress the xrefs map to the principal id key plus the
+                # human-readable label, so the demo output stays scannable.
                 principal = (
                     xref.get("hgnc")
                     or xref.get("uberon")
@@ -262,7 +271,7 @@ def main() -> int:
                 else:
                     print(f"          xrefs[{slot}] : {principal}")
         else:
-            print("    OUT : (no resolution — slot values pass through)")
+            print("    OUT : (no resolution; slot values pass through)")
         print(f"    new keys on output dict: {new_keys}")
 
     print()

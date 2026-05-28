@@ -1,15 +1,15 @@
-"""Maintainer script — harvest Cell Ontology (CL) CURIEs for cell-type terms.
+"""Maintainer script, harvest Cell Ontology (CL) CURIEs for cell-type terms.
 
 Companion to ``build_corpus_concept_candidates.py`` and
 ``build_biotools_index.py``. The OLS4 corpus harvester only resolves
 methodological vocab; the bio.tools harvester only resolves software.
-Neither catches **cell types** — yet single-cell claims like
+Neither catches **cell types**, yet single-cell claims like
 ``marker_of_cell_type: WNT4 cnidocyte`` need a CURIE for the object slot.
 
 This script ships a hand-curated list of candidate cell-type names
-(drawn from the three cell-atlas papers in the 6-paper mini-corpus —
+(drawn from the three cell-atlas papers in the 6-paper mini-corpus,
 Sebé-Pedrós 2018 *Nematostella* atlas, Tabula Muris 2018, Tabula
-Sapiens 2022 — plus the canonical mammalian immune / nervous /
+Sapiens 2022, plus the canonical mammalian immune / nervous /
 epithelial cell types that show up in any transcriptomics study). Each
 candidate is resolved against the **Cell Ontology** via OLS4 search
 with the same cascade match modes as ``build_corpus_concept_candidates``
@@ -25,7 +25,7 @@ label-first cascade refinement), the OLS4 cascade picks the canonical
 label-match instead.
 
 Pleasant surprise found while writing this: CL covers cnidarian cell
-types like ``cnidocyte`` (CL:0011029) — unlike UBERON which had no
+types like ``cnidocyte`` (CL:0011029), unlike UBERON which had no
 entry for cnidarian-specific anatomy. So *Nematostella* single-cell
 claims get real CL CURIEs, not deferred-to-future-release stubs.
 
@@ -52,9 +52,9 @@ from indicium_adapters_transcriptomics.data.build_corpus_concept_candidates impo
 
 OUT_COLUMNS = ("term", "curie", "label", "description", "ontology", "source")
 
-# Cascade — same as build_corpus_concept_candidates for stat_test /
+# Cascade, same as build_corpus_concept_candidates for stat_test /
 # protocol axes. We skip ``substring`` for cell types because the labels
-# are already minimal — a substring match would invite false positives
+# are already minimal, a substring match would invite false positives
 # like ``cell`` matching ``B cell`` matching ``T cell`` matching anything.
 _MATCH_MODES = ("exact", "prefix")
 
@@ -65,13 +65,13 @@ class Candidate(NamedTuple):
 
 
 # Curated candidate list, organised by source paper. Names are written
-# as a human would type them — singular, lowercase except for proper
+# as a human would type them, singular, lowercase except for proper
 # nouns. The OLS4 cascade handles label/synonym matching with case-
 # insensitive comparison.
 CANDIDATES: tuple[Candidate, ...] = (
     # --- Nematostella vectensis (Sebé-Pedrós 2018 cell atlas) ---------------
     # cnidocyte is the iconic cnidarian cell type; nematocyte is a
-    # synonym — both should resolve to CL:0011029.
+    # synonym, both should resolve to CL:0011029.
     Candidate("cnidocyte",                  "Sebé-Pedrós 2018 (Nematostella atlas)"),
     Candidate("nematocyte",                 "Sebé-Pedrós 2018 (Nematostella atlas)"),
     Candidate("epidermal cell",             "Sebé-Pedrós 2018 + general"),
@@ -163,12 +163,12 @@ def build(out_path: Path, unresolved_path: Path) -> int:
                 print("  ✗ no match in CL", file=sys.stderr)
                 unresolved.append(cand)
                 continue
-            # Deduplicate on CURIE — cnidocyte + nematocyte both resolve to
+            # Deduplicate on CURIE, cnidocyte + nematocyte both resolve to
             # CL:0011029. Keep the first (label-exact will land first).
             if info["curie"] in seen_curies:
                 print(
                     f"  ⇣ duplicate CURIE {info['curie']} (already written for "
-                    f"another candidate) — skipping the row.",
+                    f"another candidate), skipping the row.",
                     file=sys.stderr,
                 )
                 continue

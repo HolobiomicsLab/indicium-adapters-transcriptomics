@@ -1,35 +1,34 @@
-"""ISA-Tab parser (v0.7.0).
+"""ISA-Tab parser.
 
 `ISA-Tab <https://isa-specs.readthedocs.io/>`__ is a tab-separated
-serialisation of an Investigation / Study / Assay tree. Each
-submission lives in a directory containing:
+serialisation of an Investigation / Study / Assay tree. Each submission
+lives in a directory containing:
 
-* exactly one ``i_*.txt`` — the **investigation** file (top-level
-  metadata: title, authors, contacts, publications, etc.).
-* one or more ``s_*.txt`` — **study** files (sample sheets:
-  ``Source Name``, ``Sample Name``, ``Characteristics[organism]``,
-  ``Characteristics[organism part]``, …).
-* one or more ``a_*.txt`` — **assay** files (per-assay measurement
-  metadata: ``Protocol REF``, ``Parameter Value[instrument model]``,
-  ``Data Files``, …).
+* exactly one ``i_*.txt`` (the investigation file): top-level metadata
+  such as title, authors, contacts, publications.
+* one or more ``s_*.txt`` (study files, sample sheets): ``Source Name``,
+  ``Sample Name``, ``Characteristics[organism]``,
+  ``Characteristics[organism part]``, etc.
+* one or more ``a_*.txt`` (assay files): per-assay measurement metadata
+  such as ``Protocol REF``, ``Parameter Value[instrument model]``,
+  ``Data Files``.
 
-The investigation file has its own quirky shape: each line is
-``Section Header\\tcolumn0\\tcolumn1\\t...``, organised by ``ONTOLOGY
-SOURCE REFERENCE``, ``INVESTIGATION``, ``STUDY``, ``PUBLICATION``,
-... blocks. Each block has a fixed set of field rows.
+The investigation file has its own quirky shape. Each line is
+``Section Header\\tcolumn0\\tcolumn1\\t...``, organised into blocks
+named ``ONTOLOGY SOURCE REFERENCE``, ``INVESTIGATION``, ``STUDY``,
+``PUBLICATION``, etc. Each block has a fixed set of field rows.
 
-For v0.7.0 we keep the parser narrow:
+This parser stays narrow:
 
-* From ``i_*.txt`` — extract ``Study Identifier`` and
-  ``Study PubMed ID`` only.
-* From any ``s_*.txt`` — extract distinct ``Characteristics[organism]``
-  values for the species hint.
-* From any ``a_*.txt`` — extract distinct
-  ``Parameter Value[instrument model]`` values (or
-  ``Parameter Value[platform]``).
+* From ``i_*.txt``: extracts ``Study Identifier`` and ``Study PubMed ID``.
+* From any ``s_*.txt``: extracts distinct ``Characteristics[organism]``
+  values, used to derive the species hint.
+* From any ``a_*.txt``: extracts distinct
+  ``Parameter Value[instrument model]`` and ``Parameter Value[platform]``
+  values.
 
-That's sufficient to emit ``consolidates_dataset`` + ``sequenced_on``
-+ ``uses_database`` claims for a typical ISA submission.
+That is enough to emit ``consolidates_dataset``, ``sequenced_on`` and
+``uses_database`` claims for a typical ISA submission.
 """
 from __future__ import annotations
 
@@ -38,13 +37,12 @@ from pathlib import Path
 
 
 def parse_isa_tab(directory: str | Path) -> list[dict]:
-    """Parse an ISA-Tab submission directory and emit study-level claim dicts.
+    """Parse an ISA-Tab submission directory and emit study-level claims.
 
     ``directory`` must contain at least one ``i_*.txt`` investigation
-    file. Study and assay files are picked up by their ``s_*.txt`` /
-    ``a_*.txt`` prefix.
-
-    Returns an empty list if the directory has no ``i_*.txt`` file.
+    file. Study and assay files are picked up by their ``s_*.txt`` and
+    ``a_*.txt`` prefixes. Returns an empty list when the directory has
+    no investigation file.
     """
     root = Path(directory)
     if not root.is_dir():
@@ -55,6 +53,8 @@ def parse_isa_tab(directory: str | Path) -> list[dict]:
         return []
 
     inv_fields = _parse_investigation(investigation_files[0])
+    # Prefer ``Study Identifier`` but fall back to ``Investigation
+    # Identifier`` for submissions that only fill in the top level.
     study_id = (
         inv_fields.get("Study Identifier", [""])[0]
         or inv_fields.get("Investigation Identifier", [""])[0]
@@ -64,13 +64,16 @@ def parse_isa_tab(directory: str | Path) -> list[dict]:
 
     pubmeds = [v for v in inv_fields.get("Study PubMed ID", []) if v]
 
-    # Sample organism(s) from any s_*.txt
+    # Sample organisms from any ``s_*.txt`` file.
     organisms: list[str] = []
     for s_path in sorted(root.glob("s_*.txt")):
         organisms.extend(_collect_column(s_path, "Characteristics[organism]"))
     species = _detect_species(organisms)
 
-    # Instrument model(s) from any a_*.txt
+    # Instrument models from any ``a_*.txt`` file. We try the canonical
+    # ``Parameter Value[instrument model]`` column first, then fall back
+    # to ``Parameter Value[platform]`` for submissions that file the
+    # instrument under the platform column.
     instruments: list[str] = []
     for a_path in sorted(root.glob("a_*.txt")):
         for col in (
@@ -82,6 +85,8 @@ def parse_isa_tab(directory: str | Path) -> list[dict]:
     claims: list[dict] = []
 
     def _emit(qualifier: str, obj: str) -> None:
+        """Append one claim, skipping empty objects and attaching the
+        species hint when available."""
         if not obj:
             return
         claim: dict = {
@@ -105,10 +110,12 @@ def parse_isa_tab(directory: str | Path) -> list[dict]:
 
 
 def _parse_investigation(path: Path) -> dict[str, list[str]]:
-    """ISA investigation files are TSV where row 0 of each block is the
-    field name and the remaining columns are values across "studies"
-    (often a single value per row). We collapse to ``{field → list of
-    non-empty values}``."""
+    """Parse an ISA investigation TSV into ``{field: list of values}``.
+
+    Investigation files use TSV where column 0 is the field name and the
+    remaining columns hold one value per study (often a single value per
+    row). Empty cells are dropped and duplicate field rows are merged.
+    """
     out: dict[str, list[str]] = {}
     with path.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.reader(fh, delimiter="\t")
@@ -129,9 +136,12 @@ def _parse_investigation(path: Path) -> dict[str, list[str]]:
 
 
 def _collect_column(path: Path, column_name: str) -> list[str]:
-    """Read a TSV with a header row and return all non-empty values in
-    the column whose header matches ``column_name`` (case-sensitive,
-    as ISA-Tab columns are conventionally capitalised exactly)."""
+    """Return all non-empty values from the given column of a TSV.
+
+    Matches the column header case-sensitively, since ISA-Tab columns
+    are conventionally capitalised exactly. Returns an empty list when
+    the file is missing, empty, or has no such column.
+    """
     if not path.is_file():
         return []
     with path.open("r", encoding="utf-8", newline="") as fh:
@@ -154,6 +164,7 @@ def _collect_column(path: Path, column_name: str) -> list[str]:
 
 
 def _dedupe(seq: list[str]) -> list[str]:
+    """Return ``seq`` with duplicates removed, preserving first-seen order."""
     seen: set[str] = set()
     out: list[str] = []
     for s in seq:
@@ -163,6 +174,8 @@ def _dedupe(seq: list[str]) -> list[str]:
     return out
 
 
+# Substring-to-tag mapping for organism detection. Same recognised set as
+# the other parsers in this package.
 _SPECIES_FROM_NAME: tuple[tuple[str, str], ...] = (
     ("homo sapiens",              "human"),
     ("mus musculus",              "mouse"),
@@ -174,6 +187,7 @@ _SPECIES_FROM_NAME: tuple[tuple[str, str], ...] = (
 
 
 def _detect_species(organisms: list[str]) -> str | None:
+    """Return the first recognised species tag found in ``organisms``."""
     for organism in organisms:
         lc = organism.strip().lower()
         for needle, tag in _SPECIES_FROM_NAME:

@@ -1,19 +1,19 @@
-"""indicium-adapters-transcriptomics — transcriptomics-domain adapters for the indicium ecosystem.
+"""indicium-adapters-transcriptomics: transcriptomics-domain adapters for the indicium ecosystem.
 
-v0.1.0 ships two sibling adapters, both registered under the
+The package exposes two sibling adapters, both registered under the
 ``indicium.adapters`` entry-point group:
 
-- ``BulkTranscriptomicsAdapter`` — bulk RNA-seq / microarray / time-series
-  expression claims plus study-level assay metadata. Repository-accession
-  enrichment in v0.1.0; gene-symbol enrichment in v0.1.1.
-- ``SingleCellTranscriptomicsAdapter`` — cell-type markers, cluster
-  enrichment, spatial localisation. Structure-only in v0.1.0;
-  ``enrich_claim()`` becomes a real CL + UBERON lookup in v0.2.0 once a
-  reference single-cell paper anchors which terms to bundle.
+* ``BulkTranscriptomicsAdapter`` for bulk RNA-seq, microarray and
+  time-series expression claims plus study-level assay metadata.
+* ``SingleCellTranscriptomicsAdapter`` for cell-type markers, cluster
+  enrichment and spatial localisation.
 
-The ``accession_to_curie`` helper from ``_registries`` is re-exported for
-bridge layers that want to normalise GEO / SRA / ENA / ArrayExpress / ENCODE /
-BioProject / dbGaP / BioStudies accessions before emitting claims.
+The ``accession_to_curie`` helper from ``_registries`` is also re-exported
+for bridge layers that need to normalise GEO / SRA / ENA / ArrayExpress /
+ENCODE / BioProject / dbGaP / BioStudies accessions before emitting claims.
+
+See ``REPORT.html`` at the project root for the full development write-up
+and ``CHANGELOG.md`` for the release-by-release history.
 """
 from __future__ import annotations
 

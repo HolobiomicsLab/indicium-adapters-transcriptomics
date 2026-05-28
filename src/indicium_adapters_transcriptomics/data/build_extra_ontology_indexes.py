@@ -1,16 +1,16 @@
-"""Maintainer script — harvest the v0.8.0 high-priority ontology indexes.
+"""Maintainer script, harvest the v0.8.0 high-priority ontology indexes.
 
 Following the 2026-05-28 OLS4 audit (see ``articles/_ols4_audit_report.md``),
 seven ontologies were identified as the highest-yield additions for the
 ASB transcriptomics benchmark phase:
 
-- **CHEBI** — chemicals / drugs / ligands (perturbation experiments).
-- **HP** — Human Phenotype Ontology (clinical transcriptomics).
-- **MP** — Mammalian Phenotype Ontology (mouse studies).
-- **DOID** — Human Disease Ontology (cancer / disorder vocab).
-- **PR** — Protein Ontology (complex / isoform-level claims).
-- **OBA** — Ontology of Biological Attributes (cross-species traits).
-- **ENVO** — Environment Ontology (holobiont / ecology context).
+- **CHEBI**, chemicals / drugs / ligands (perturbation experiments).
+- **HP**, Human Phenotype Ontology (clinical transcriptomics).
+- **MP**, Mammalian Phenotype Ontology (mouse studies).
+- **DOID**, Human Disease Ontology (cancer / disorder vocab).
+- **PR**, Protein Ontology (complex / isoform-level claims).
+- **OBA**, Ontology of Biological Attributes (cross-species traits).
+- **ENVO**, Environment Ontology (holobiont / ecology context).
 
 Same cascade pattern as ``build_cl_concept_index.py``: candidate names
 → OLS4 exact-label / synonym / prefix search → re-verify by IRI lookup.
@@ -18,7 +18,7 @@ One bundled TSV per ontology so each can be re-harvested independently
 when its candidate list grows.
 
 Hand-curation of CURIEs is still avoided. The only curation here is
-the candidate-NAME list per ontology — the OLS4 cascade picks the
+the candidate-NAME list per ontology, the OLS4 cascade picks the
 matching CURIE, or the term lands in the per-ontology unresolved log
 for the next iteration.
 
@@ -49,7 +49,7 @@ OUT_COLUMNS = ("term", "curie", "label", "description", "ontology", "source")
 @dataclass(frozen=True)
 class OntologyConfig:
     """One harvest target: ontology id + axis label + candidate names."""
-    ols_id: str             # OLS4 ontology key — lowercase: "chebi", "hp"
+    ols_id: str             # OLS4 ontology key, lowercase: "chebi", "hp"
     ontology_label: str     # Canonical prefix written to TSV (e.g. "CHEBI")
     axis: str               # axis tag for the ``source`` column
     out_filename: str       # bundled TSV filename
@@ -58,7 +58,7 @@ class OntologyConfig:
 
 # --- Candidate lists -------------------------------------------------------
 #
-# Each list is small on purpose — ~20-40 terms per ontology covering the
+# Each list is small on purpose, ~20-40 terms per ontology covering the
 # vocabulary most likely to fire on a diverse transcriptomics corpus.
 # Expand the list (re-run) when benchmark misses surface new terms.
 
@@ -153,7 +153,7 @@ DOID_CANDIDATES: tuple[str, ...] = (
 
 
 PR_CANDIDATES: tuple[str, ...] = (
-    # Functional groups (root-ish — high recall)
+    # Functional groups (root-ish, high recall)
     "transcription factor", "enzyme", "kinase", "phosphatase",
     "G protein-coupled receptor", "ion channel", "ligand",
     # Common proteins under canonical names (the PR catalogue
@@ -232,7 +232,7 @@ MS_CANDIDATES: tuple[str, ...] = (
 )
 
 
-# EC_CANDIDATES kept here for reference but EC is deferred — see the
+# EC_CANDIDATES kept here for reference but EC is deferred, see the
 # REGISTRY comment. The OLS4 ``ec`` ontology re-exports GO molecular-
 # function terms without human-readable labels, so cascade label-
 # matching can't catch common enzyme class names. v0.9.x will land
@@ -256,7 +256,7 @@ UO_CANDIDATES: tuple[str, ...] = (
     "gram", "kilogram", "milligram", "microgram", "nanogram", "picogram",
     # Volume units
     "liter", "milliliter", "microliter", "nanoliter",
-    # Concentration units (molar) — note: 'molar' might be ambiguous;
+    # Concentration units (molar), note: 'molar' might be ambiguous;
     # try the full canonical names
     "molar", "millimolar", "micromolar", "nanomolar", "picomolar",
     "mole", "millimole", "micromole",
@@ -458,7 +458,7 @@ XPO_CANDIDATES: tuple[str, ...] = (
 
 
 REGISTRY: tuple[OntologyConfig, ...] = (
-    # --- v0.8.0 — Top-7 absolute priority -----------------------------------
+    # --- v0.8.0, Top-7 absolute priority -----------------------------------
     OntologyConfig(
         ols_id="chebi", ontology_label="CHEBI",  axis="chemical",
         out_filename="chebi_concept_index.tsv",
@@ -500,7 +500,7 @@ REGISTRY: tuple[OntologyConfig, ...] = (
         out_filename="ms_concept_index.tsv",
         candidates=MS_CANDIDATES,
     ),
-    # EC removed from v0.9.0 REGISTRY — the OLS4 ``ec`` ontology re-
+    # EC removed from v0.9.0 REGISTRY, the OLS4 ``ec`` ontology re-
     # exports GO molecular-function terms without human-readable labels
     # so cascade label-matching can't catch the common enzyme class
     # names (kinase / phosphatase / etc.). 3 / 30 hits in the first
@@ -519,7 +519,7 @@ REGISTRY: tuple[OntologyConfig, ...] = (
         out_filename="mod_concept_index.tsv",
         candidates=MOD_CANDIDATES,
     ),
-    # RXNO and HCAO deferred to v0.9.x — same issue as EC: in OLS4,
+    # RXNO and HCAO deferred to v0.9.x, same issue as EC: in OLS4,
     # ``rxno`` is dominated by CHEBI / BFO imports without named
     # reaction labels, and ``hcao`` re-publishes CARO / CL / CLO / GO
     # terms (redundant with our existing CL index). 2 / 16 and 0 / 17
@@ -552,7 +552,7 @@ REGISTRY: tuple[OntologyConfig, ...] = (
         out_filename="emapa_concept_index.tsv",
         candidates=EMAPA_CANDIDATES,
     ),
-    # ZP deferred to v0.9.x — labels follow a peculiar
+    # ZP deferred to v0.9.x, labels follow a peculiar
     # "<entity> abnormal, abnormal" pattern that doesn't match
     # the natural-language "abnormal <entity>" form our candidates
     # use. 1 / 16 hits in the first harvest. Refining the candidate
@@ -570,7 +570,7 @@ REGISTRY: tuple[OntologyConfig, ...] = (
 )
 
 
-# Same cascade as build_cl_concept_index — exact label/synonym then
+# Same cascade as build_cl_concept_index, exact label/synonym then
 # prefix; substring omitted because labels in these ontologies are
 # typically minimal already.
 _MATCH_MODES = ("exact", "prefix")
@@ -634,7 +634,7 @@ def harvest_ontology(cfg: OntologyConfig, data_dir: Path) -> tuple[int, int]:
                 continue
             if info["curie"] in seen_curies:
                 print(
-                    f"    ⇣ duplicate CURIE {info['curie']} — skipping row.",
+                    f"    ⇣ duplicate CURIE {info['curie']}, skipping row.",
                     file=sys.stderr,
                 )
                 continue

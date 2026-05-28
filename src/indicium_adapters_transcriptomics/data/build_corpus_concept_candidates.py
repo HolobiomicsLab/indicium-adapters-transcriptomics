@@ -1,4 +1,4 @@
-"""Maintainer script — harvest concept CURIEs from the mini-corpus extraction.
+"""Maintainer script, harvest concept CURIEs from the mini-corpus extraction.
 
 This script reads the per-paper / aggregate vocabulary JSON produced by
 ``articles/_extract_vocab.py`` over the 6-paper mini-corpus and uses the
@@ -11,22 +11,22 @@ accepted.
 **Two-tier matching** (per axis): each axis declares both a preferred
 ontology list *and* a match mode that tunes the strictness:
 
-- ``exact`` — label or synonym must equal the corpus term verbatim
+- ``exact``, label or synonym must equal the corpus term verbatim
   (case-insensitive). Used as the default for ``de_tool`` / ``sc_tool``
   / ``aligner_quant`` axes where false positives are dangerous.
-- ``prefix`` — corpus term must be the whole-word **prefix** of the
+- ``prefix``, corpus term must be the whole-word **prefix** of the
   OLS4 label (case-insensitive); allows descriptive suffixes
   ("Wilcoxon" → "Wilcoxon Signed Rank Test"; "bulk RNA-seq" → "bulk
   RNA-seq assay"; "Visium" → "Visium Spatial Gene Expression").
-- ``substring`` — corpus term must appear as a whole-word **substring**
+- ``substring``, corpus term must appear as a whole-word **substring**
   of the OLS4 label (case-insensitive); used for instrument-series
   terms whose canonical EFO label prepends the vendor name
   ("NovaSeq" → "Illumina NovaSeq 6000"). Resolution picks the
-  *first* OLS4 search result that matches — OLS4 search is ranked by
+  *first* OLS4 search result that matches, OLS4 search is ranked by
   relevance so the top hit is typically the canonical / oldest model.
 
 The exact / prefix / substring modes are tried in cascade per axis;
-the first hit wins. Hand-curation of CURIEs is still avoided — the
+the first hit wins. Hand-curation of CURIEs is still avoided, the
 only curation is which mode applies to which axis.
 
 The output schema matches ``concept_index.tsv``::
@@ -36,7 +36,7 @@ The output schema matches ``concept_index.tsv``::
 The ``source`` column tags the match mode used so the provenance is
 auditable (e.g. ``corpus extraction (platform, substring-match)``).
 
-Usage (maintainer-only — not run at install or import time)::
+Usage (maintainer-only, not run at install or import time)::
 
     python -m indicium_adapters_transcriptomics.data.build_corpus_concept_candidates
 
@@ -71,7 +71,7 @@ DEFAULT_VOCAB_SUMMARY = (
 
 
 # Axis → ordered tuple of OLS4 ontology keys (lowercase) to search.
-# The order encodes a *preference* — the first ontology that yields a
+# The order encodes a *preference*, the first ontology that yields a
 # match (under the axis's match modes) wins. This is one of the two
 # places where domain knowledge is encoded (the other is the per-axis
 # MATCH_MODES dict below). Specific CURIEs are NEVER hand-picked.
@@ -97,7 +97,7 @@ AXIS_ONTOLOGIES: dict[str, tuple[str, ...]] = {
 #   prepends a vendor name.
 #
 # Software axes (de_tool, sc_tool, aligner_quant, etc.) stay on
-# ``exact`` only — they're handled by bio.tools downstream, and a
+# ``exact`` only, they're handled by bio.tools downstream, and a
 # loose match in EDAM/OBI would invent a CURIE for a different concept.
 MATCH_MODES: dict[str, tuple[MatchMode, ...]] = {
     "platform":       ("exact", "prefix", "substring"),
@@ -285,7 +285,7 @@ def resolve_term(term: str, axis: str) -> Hit | None:
     The cascade is depth-first over modes: for each mode, every preferred
     ontology is tried before moving to the next mode. This guarantees
     an exact match in *any* preferred ontology wins over a prefix /
-    substring match in the *first* preferred ontology — strictness beats
+    substring match in the *first* preferred ontology, strictness beats
     preference."""
     ontologies = AXIS_ONTOLOGIES.get(axis, ())
     modes = MATCH_MODES.get(axis, ("exact",))
@@ -374,7 +374,7 @@ def build(
 
     for term, axis in candidates:
         if term.lower() in skip_lower:
-            print(f"[skip]   {term} ({axis}) — already in concept_index.tsv",
+            print(f"[skip]   {term} ({axis}), already in concept_index.tsv",
                   file=sys.stderr)
             continue
         print(f"[ols4] resolving {term!r} ({axis}) ...", file=sys.stderr)

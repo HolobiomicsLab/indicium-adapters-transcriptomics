@@ -1,14 +1,13 @@
-"""Quickstart — discover, enrich, validate in 30 lines.
+"""Quickstart: discover, enrich, validate in 30 lines.
 
-The shortest runnable demonstration that the adapter is wired
-correctly: discover both adapters via the indicium entry-point
-machinery, enrich a hand-built claim through each one, then
-validate the SHACL shapes graph parses. Use this as the
-"Hello World" smoke test when bringing the package into a new
-environment.
+The shortest runnable demonstration that the adapter is wired correctly:
+discover both adapters via the indicium entry-point machinery, enrich a
+hand-built claim through each one, then validate that the bundled SHACL
+shapes graph parses. Use this as the "Hello World" smoke test when
+bringing the package into a new environment.
 
-The Warner2018 demo (``examples/enrich_warner2018.py``) is the
-fuller showcase across 25 representative claims.
+The Warner2018 demo at ``examples/enrich_warner2018.py`` is the fuller
+showcase across 25 representative claims.
 
 Run::
 
@@ -23,11 +22,14 @@ import pyshacl
 import rdflib
 from indicium_adapters import compose_adapters, discover_adapters
 
+# Force UTF-8 on stdout so the CURIEs and labels render correctly on
+# Windows consoles, which still default to cp1252.
 sys.stdout.reconfigure(encoding="utf-8")
 
 
 def main() -> int:
-    # 1) Discover.
+    # 1) Discovery. ``discover_adapters`` walks the indicium entry-point
+    # group and instantiates one adapter per registered name.
     adapters = discover_adapters()
     print(f"[discover] {len(adapters)} adapters: {sorted(adapters)}")
     bulk = adapters["bulk-transcriptomics"]
@@ -48,12 +50,12 @@ def main() -> int:
     print(f"[sc]   subject CURIE: {sc_claim['ontology_terms']['subject']}")
     print(f"[sc]   object  CURIE: {sc_claim['ontology_terms']['object']}")
 
-    # 3) Verify the composed SHACL shapes graph parses cleanly under
-    #    pyshacl. We validate an *empty* data graph against the shapes
-    #    — the call surfaces any TTL syntax / prefix issues in the
-    #    bundled shapes as a raised exception. The conformance result
-    #    is uninteresting (no data → no violations) but the parse step
-    #    is the actual smoke test.
+    # 3) Verify that the composed SHACL shapes graph parses cleanly under
+    # pyshacl. We validate an empty data graph against the shapes. The
+    # call surfaces any TTL syntax or prefix issues in the bundled shapes
+    # as a raised exception. The conformance result is not interesting
+    # (no data implies no violations), but the parse step is the actual
+    # smoke test we care about here.
     composite = compose_adapters([bulk, sc])
     shapes_graph = composite.shacl_shapes()
     empty_data = rdflib.Graph()
@@ -66,7 +68,7 @@ def main() -> int:
     print(f"[shacl] shapes graph parsed ({len(shapes_graph)} triples), "
           f"conforms on empty data: {conforms}")
 
-    # 4) Final sanity dump.
+    # 4) Final sanity dump of the enriched bulk claim.
     print()
     print("Enriched bulk claim:")
     print(json.dumps(bulk_claim, indent=2, ensure_ascii=False))

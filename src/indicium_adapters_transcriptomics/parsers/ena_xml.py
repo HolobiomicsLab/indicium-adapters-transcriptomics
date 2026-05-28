@@ -1,7 +1,7 @@
-"""ENA / SRA XML parser (v0.7.0).
+"""ENA / SRA XML parser.
 
 `ENA <https://www.ebi.ac.uk/ena>`__'s ``study`` and ``experiment``
-endpoints return an XML envelope shaped like::
+endpoints return XML envelopes shaped like::
 
     <STUDY_SET>
       <STUDY accession="PRJEB...">
@@ -14,13 +14,13 @@ endpoints return an XML envelope shaped like::
     </STUDY_SET>
 
 The ``experiment`` envelope adds ``LIBRARY_DESCRIPTOR`` (library
-strategy / source / selection) and ``PLATFORM`` (Illumina / PacBio /
-Nanopore vendor + instrument model).
+strategy / source / selection) and ``PLATFORM`` (vendor and instrument
+model, e.g. Illumina / PacBio / Nanopore).
 
-This parser handles both envelopes via the same code path: it walks
-all ``<STUDY>`` and ``<EXPERIMENT>`` elements and emits one claim per
-useful field. ENA accessions (``PRJEB...``, ``SRP...``, ``ERR...``)
-flow through the bulk adapter's accession resolver downstream.
+This parser handles both envelopes from the same code path: it walks
+every ``<STUDY>`` and ``<EXPERIMENT>`` element and emits one claim per
+useful field. ENA accessions (``PRJEB...``, ``SRP...``, ``ERR...``) are
+recognised downstream by the bulk adapter's accession resolver.
 """
 from __future__ import annotations
 
@@ -31,36 +31,36 @@ def parse_ena_xml(xml_text: str) -> list[dict]:
     """Parse ENA / SRA XML and return study-level claim dicts.
 
     Recognises ``<STUDY>`` and ``<EXPERIMENT>`` elements. For each
-    study, emits ``consolidates_dataset`` claims linking the project
-    accession to its experiments/samples; for each experiment, emits
-    ``sequenced_on`` claims for the instrument model and
-    ``aligned_with`` is **not** emitted (ENA descriptors don't
-    typically include alignment-pipeline metadata).
+    experiment, emits a ``consolidates_dataset`` claim linking its
+    project accession to the experiment, plus a ``sequenced_on`` claim
+    for the instrument model. ``aligned_with`` is not emitted because
+    ENA descriptors do not typically include alignment-pipeline metadata.
     """
     root = ET.fromstring(xml_text)
     claims: list[dict] = []
 
-    # Walk all STUDY elements (top-level or nested).
+    # Walk every STUDY element (top-level or nested). The body is empty
+    # for now: titles and abstracts do not map cleanly to a qualifier in
+    # the current schema, so we record the accession only.
     for study in root.iter("STUDY"):
         study_acc = study.attrib.get("accession", "").strip()
         if not study_acc:
-            # Fall back to the alias / PRIMARY_ID under IDENTIFIERS.
+            # Fall back to the alias / PRIMARY_ID under IDENTIFIERS when
+            # the accession attribute is missing.
             for prim in study.iter("PRIMARY_ID"):
                 if prim.text:
                     study_acc = prim.text.strip()
                     break
         if not study_acc:
             continue
-        # Title — useful as descriptive data, but no qualifier maps
-        # cleanly. Skipped in v0.7.0.
 
-    # Walk all EXPERIMENT elements. Each carries a study reference and
+    # Walk every EXPERIMENT element. Each carries a study reference and
     # a platform / instrument model.
     for exp in root.iter("EXPERIMENT"):
         exp_acc = exp.attrib.get("accession", "").strip()
         if not exp_acc:
             continue
-        # Find the study reference.
+        # Find the parent study reference, if any.
         study_ref = ""
         for ref in exp.iter("STUDY_REF"):
             study_ref = ref.attrib.get("accession", "").strip()
@@ -72,12 +72,12 @@ def parse_ena_xml(xml_text: str) -> list[dict]:
                 "qualifier": "consolidates_dataset",
                 "object": exp_acc,
             })
-        # Platform / instrument.
+        # Platform / instrument. PLATFORM children are vendor-named
+        # (<ILLUMINA>, <OXFORD_NANOPORE>, <PACBIO_SMRT>, ...) and each
+        # contains an <INSTRUMENT_MODEL> with the actual model string.
         platform = exp.find("PLATFORM")
         if platform is not None:
             for vendor_elem in platform:
-                # Children are vendor-named: <ILLUMINA>, <OXFORD_NANOPORE>,
-                # <PACBIO_SMRT>, etc. Each contains an <INSTRUMENT_MODEL>.
                 model_elem = vendor_elem.find("INSTRUMENT_MODEL")
                 if model_elem is not None and model_elem.text:
                     claim_subject = study_ref or exp_acc

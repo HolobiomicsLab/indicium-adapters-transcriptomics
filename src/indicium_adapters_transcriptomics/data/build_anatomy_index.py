@@ -1,4 +1,4 @@
-"""Maintainer script — regenerate the bundled ``anatomy_index.tsv``.
+"""Maintainer script: regenerate the bundled ``anatomy_index.tsv``.
 
 Takes a curated list of anatomy terms (drawn from the Cheung et al. 2024
 Tomo-seq paper on *Nematostella vectensis* whole-body remodelling and
@@ -8,7 +8,7 @@ with it, picking the shortest such label)** are written to the TSV. Loose
 matches that promote a hyponym (e.g. *"nasal tentacle"* instead of
 *"tentacle"*) are rejected.
 
-The output schema (kept narrow on purpose — anatomy lookups don't need
+The output schema (kept narrow on purpose, anatomy lookups don't need
 the full HGNC-style cross-reference matrix):
 
     term  uberon  label  description  source
@@ -16,7 +16,7 @@ the full HGNC-style cross-reference matrix):
 ``term`` is the lower-cased lookup key. ``source`` records which paper /
 context the term was selected from so the bundle stays auditable.
 
-Usage (maintainer-only — not run at install or import time)::
+Usage (maintainer-only, not run at install or import time)::
 
     python -m indicium_adapters_transcriptomics.data.build_anatomy_index
 
@@ -45,7 +45,7 @@ class Query(NamedTuple):
 # Anatomy terms drawn from Cheung et al. 2024 plus a couple of generic
 # concepts useful as anatomical-region anchors. Each is searched against
 # UBERON; entries that don't yield a label exactly matching (or starting
-# with) the query are dropped — see TRIAGED_OUT at the bottom of this
+# with) the query are dropped; see TRIAGED_OUT at the bottom of this
 # file for terms known not to have a UBERON entry.
 CURATED_TERMS: tuple[Query, ...] = (
     Query("mesentery", "Cheung 2024"),

@@ -1,18 +1,14 @@
-"""SingleCellTranscriptomicsAdapter — single-cell and spatial transcriptomics adapter.
+"""SingleCellTranscriptomicsAdapter: single-cell and spatial transcriptomics adapter.
 
 Covers cell-resolution claims: cell-type markers, cluster-level enrichment,
-spatial-domain localisation. Disjoint from ``BulkTranscriptomicsAdapter``:
-generic expression assertions and study-level workflow qualifiers live in the
-bulk adapter; this one adds the qualifiers that only make sense once you have
-per-cell or per-spot resolution.
+spatial-domain localisation. The qualifier set is disjoint from the bulk
+adapter on purpose. Generic expression assertions and study-level workflow
+metadata stay on the bulk side; this adapter only adds claims that need
+per-cell or per-spot resolution to make sense.
 
-v0.2.0 introduced UBERON anatomy enrichment for the spatial-localisation
-qualifiers; v0.4.0 wires in the shared gene resolver (so a single-cell
-claim like ``marker_of_cell_type: WNT4 cnidocyte`` now resolves WNT4 to
-HGNC:12783) and adopts the symmetric resolver-dispatcher pattern used
-by the bulk adapter. Cell-type (CL ontology) enrichment for the cell-type
-qualifiers themselves is still on the v0.5.0 roadmap — requires building
-a CL index from the corpus.
+The adapter is a pure-function claim enricher (no LLM extraction, no network
+calls, no file writes) and shares the same resolver back-end as the bulk
+adapter, so gene-name resolution stays consistent across the two siblings.
 """
 from __future__ import annotations
 
@@ -32,18 +28,19 @@ from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIX
 __all__ = ["SingleCellTranscriptomicsAdapter"]
 
 
-# Slot names that may carry an anatomical term and therefore benefit from
-# UBERON lookup. Object-side mostly — the spatial qualifiers describe a gene
-# (subject) localised in a tissue (object).
+# Slot names checked by ``enrich_claim``. Single-cell claims usually have a
+# gene as subject and an anatomical structure or cell type as object, but
+# both slots are inspected so a claim with a gene in the object slot still
+# resolves.
 _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 
 
-# --- Resolver dispatch (v0.4.0) --------------------------------------------
+# --- Resolver dispatch -----------------------------------------------------
 #
-# Single-cell has no study-level qualifiers (all five qualifiers are
-# claim-level / feature assertions), so a single default priority order
-# covers every claim. Gene wins on collision-prone names; anatomy and
-# concept fall through.
+# Single-cell has no study-level qualifiers; all five qualifiers are
+# claim-level feature assertions, so a single default priority order covers
+# every claim. Gene wins on collision-prone names; anatomy and concept fall
+# through after it.
 
 _RESOLVERS: Final[dict[str, Callable[[str], tuple[str, dict[str, str]] | None]]] = {
     "gene":    resolve_gene,
@@ -55,24 +52,19 @@ _DEFAULT_PRIORITY: Final[tuple[str, ...]] = ("gene", "anatomy", "concept")
 
 
 class SingleCellTranscriptomicsAdapter:
-    """Single-cell / spatial transcriptomics DomainAdapter (api_version=1).
+    """Single-cell and spatial transcriptomics DomainAdapter (api_version=1).
 
-    Qualifiers are deliberately scoped to assertions that require
-    cell-resolution data — bulk expression qualifiers (e.g.
-    ``differentially_expressed_in``, ``marker_of``) stay in
-    ``BulkTranscriptomicsAdapter`` to preserve disjointness across siblings.
-
-    v0.1.0 is a structural stub: the adapter is discoverable, conforms to the
-    Protocol, ships SHACL CURIE-format shapes, but ``enrich_claim()`` returns
-    its input unchanged. The CL + UBERON lookup tables land in v0.2.0 once a
-    reference single-cell paper anchors the enrichment behaviour.
+    Qualifiers are scoped to assertions that require cell-resolution data.
+    Bulk expression qualifiers such as ``differentially_expressed_in`` and
+    ``marker_of`` stay on ``BulkTranscriptomicsAdapter`` to keep the two
+    sibling qualifier sets disjoint.
     """
 
     domain_id = "single-cell-transcriptomics"
     api_version = 1
 
     qualifiers: frozenset[str] = frozenset({
-        # Cell-resolution qualifiers — disjoint from the bulk set on purpose.
+        # Cell-resolution qualifiers, disjoint from the bulk set.
         "marker_of_cell_type",
         "enriched_in_cluster",
         "co_expressed_in_cell_type",
@@ -83,6 +75,11 @@ class SingleCellTranscriptomicsAdapter:
     ontology_prefixes: dict[str, str] = TRANSCRIPTOMICS_PREFIXES
 
     def extraction_context(self) -> str:
+        """Prompt fragment fed to the upstream LLM extractor.
+
+        Lists the single-cell qualifiers and tells the extractor which
+        ontologies to prefer for cell-type and tissue mentions.
+        """
         return (
             "Domain: single-cell / spatial transcriptomics. Extra qualifiers "
             "available: marker_of_cell_type, enriched_in_cluster, "
@@ -96,29 +93,28 @@ class SingleCellTranscriptomicsAdapter:
     def enrich_claim(self, claim: dict) -> dict:
         """Enrich a single-cell claim with gene / anatomy / concept CURIEs.
 
-        v0.4.0 contract: for each slot the resolver chain runs
-        ``gene`` → ``anatomy`` → ``concept`` and the first hit wins.
+        For each slot the resolver chain runs gene then anatomy then
+        concept, and the first hit wins.
 
-        Gene first means a slot like ``MMP9`` in
-        ``marker_of_cell_type: MMP9 cnidocyte`` resolves to ``HGNC:7176``
-        (was unenriched pre-v0.4.0 because single-cell had no gene
-        resolver wired). Anatomy still wins for tissue names because
-        gene-lookup of ``mesentery`` returns ``None``; concept fires
-        last as a fallback for protocol / methodology mentions.
+        * Gene runs first so a slot like ``MMP9`` in
+          ``marker_of_cell_type: MMP9 cnidocyte`` resolves to ``HGNC:7176``.
+        * Anatomy still wins for tissue names because gene lookup of
+          ``mesentery`` returns ``None``.
+        * Concept fires last as a fallback for protocol or methodology
+          mentions and (since v0.5.0) cell-type names that match CL labels.
 
-        Cell-type (CL ontology) resolution for the cell-type qualifiers
-        themselves is still on the v0.5.0 roadmap.
-
-        Pure function — never mutates the input dict.
+        Pure function: never mutates the input dict.
         """
+        # Shallow-copy the claim and its nested dicts so the caller's
+        # input is preserved.
         claim = dict(claim)
         if "ontology_terms" in claim:
             claim["ontology_terms"] = dict(claim["ontology_terms"])
         if "xrefs" in claim:
             claim["xrefs"] = dict(claim["xrefs"])
 
-        # v0.6.0: forward optional species hint to every resolver.
-        # Non-gene resolvers ignore it.
+        # Optional species hint forwarded to every resolver. Non-gene
+        # resolvers ignore it.
         species_hint = claim.get("species")
         for slot in _ENRICHABLE_SLOTS:
             name = (claim.get(slot) or "").strip()
@@ -133,15 +129,15 @@ class SingleCellTranscriptomicsAdapter:
                 claim.setdefault("ontology_terms", {})[slot] = curie
                 if xrefs:
                     claim.setdefault("xrefs", {})[slot] = xrefs
-                break  # first hit per slot wins
+                break  # First hit per slot wins.
 
         return claim
 
     def shacl_shapes(self) -> rdflib.Graph:
-        """Return ASB-claim SHACL shapes (CURIE format validation only).
+        """Return ASB-claim SHACL shapes (CURIE-format validation only).
 
-        Shares the transcriptomics shapes TTL with the bulk adapter — both
-        adapters emit claims into the same ASB graph and so apply the same
+        Shares the transcriptomics shapes TTL with the bulk adapter: both
+        adapters emit claims into the same ASB graph and apply the same
         CURIE-format NodeShape.
         """
         g = rdflib.Graph()

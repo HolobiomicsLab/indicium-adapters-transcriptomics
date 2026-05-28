@@ -1,4 +1,4 @@
-"""Maintainer script — harvest CURIEs for bioinformatics software via bio.tools.
+"""Maintainer script, harvest CURIEs for bioinformatics software via bio.tools.
 
 Companion to ``build_corpus_concept_candidates.py``. The OLS4 harvest
 catches assays / platforms / statistical concepts that live in
@@ -118,7 +118,7 @@ def _accept_exact_name(
     term: str, payload: dict, axis: str
 ) -> Hit | None:
     """Convert a bio.tools tool payload into a ``Hit`` iff the tool ``name``
-    matches the corpus term — either verbatim (case-insensitive) or after
+    matches the corpus term, either verbatim (case-insensitive) or after
     a whitespace / hyphen normalisation that catches stylistic variants
     (``Bowtie2`` vs ``Bowtie 2``)."""
     name = (payload.get("name") or "").strip()

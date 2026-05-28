@@ -1,8 +1,8 @@
-"""BioStudies JSON parser (v0.7.0).
+"""BioStudies JSON parser.
 
-`BioStudies <https://www.ebi.ac.uk/biostudies>`__ exposes each
-submission as a JSON document with a top-level ``accno`` and
-``section`` tree. Studies typically follow this shape::
+`BioStudies <https://www.ebi.ac.uk/biostudies>`__ exposes each submission
+as a JSON document with a top-level ``accno`` and a ``section`` tree.
+Studies typically follow this shape::
 
     {
       "accno": "S-BIAD123",
@@ -10,7 +10,7 @@ submission as a JSON document with a top-level ``accno`` and
         "type": "Study",
         "attributes": [
           {"name": "Title", "value": "..."},
-          {"name": "Organism", "value": "Mus musculus"},
+          {"name": "Organism", "value": "Mus musculus"}
         ],
         "subsections": [
           {
@@ -26,8 +26,8 @@ submission as a JSON document with a top-level ``accno`` and
     }
 
 The parser walks ``section`` and its ``subsections`` recursively,
-collecting ``attributes`` into a flat ``{name → value}`` dict per
-section, then emits study-level claims.
+collecting all ``attributes`` into a single flat ``{name: value}`` dict,
+then emits study-level claims from it.
 """
 from __future__ import annotations
 
@@ -38,20 +38,20 @@ from typing import Any
 def parse_biostudies_json(text_or_obj: str | dict) -> list[dict]:
     """Parse a BioStudies JSON document and return study-level claims.
 
-    ``text_or_obj`` may be the raw JSON string or an already-parsed
-    dict (which is convenient when the caller already has the
-    BioStudies record in memory).
+    ``text_or_obj`` can be either the raw JSON string or an already
+    parsed dict (convenient when the caller already has the record in
+    memory).
 
     Recognised attributes (case-insensitive):
 
-    * ``Organism`` → adds a ``species`` hint on every emitted claim.
-    * ``Pubmed`` / ``PubMed`` → ``uses_database PubMed:<id>``.
-    * ``Instrument`` / ``Instrument model`` / ``Platform`` →
-      ``sequenced_on``.
+    * ``Organism``: adds a ``species`` hint on every emitted claim.
+    * ``Pubmed`` or ``PubMed``: emits ``uses_database PubMed:<id>``.
+    * ``Instrument``, ``Instrument model``, ``Platform``: emits
+      ``sequenced_on <value>`` (one claim, first matching key wins).
 
-    The top-level ``accno`` becomes the subject of every emitted
-    claim. Nested ``links`` are not surfaced as claims in v0.7.0 —
-    they're file references, not claims.
+    The top-level ``accno`` becomes the subject of every emitted claim.
+    Nested ``links`` are not surfaced as claims: they are file
+    references, not assertions.
     """
     if isinstance(text_or_obj, str):
         data = json.loads(text_or_obj)
@@ -67,6 +67,8 @@ def parse_biostudies_json(text_or_obj: str | dict) -> list[dict]:
     claims: list[dict] = []
 
     def _emit(qualifier: str, obj: str) -> None:
+        """Append one claim, skipping empty objects and attaching the
+        species hint when one was detected."""
         if not obj:
             return
         claim: dict = {
@@ -82,23 +84,28 @@ def parse_biostudies_json(text_or_obj: str | dict) -> list[dict]:
     if pubmed:
         _emit("uses_database", f"PubMed:{pubmed}")
 
+    # Only one instrument claim per study. Pick the first attribute key
+    # that resolves to a non-empty value.
     for instrument_key in ("instrument", "instrument model", "platform"):
         inst = attrs.get(instrument_key)
         if inst:
             _emit("sequenced_on", inst)
-            break  # one instrument claim is enough
+            break
 
     return claims
 
 
-# --- helpers ---------------------------------------------------------------
+# --- helpers --------------------------------------------------------------
 
 
 def _collect_attributes(section: dict[str, Any]) -> dict[str, str]:
-    """Flatten a section's ``attributes`` list (and those of any nested
-    sub-sections) into a single ``{name.lower() → value}`` dict.
-    First-write wins on duplicates — top-level attributes are the
-    most authoritative."""
+    """Flatten a section's attributes (and those of its sub-sections) into
+    a single ``{name.lower(): value}`` dict.
+
+    First-write wins on duplicates. Top-level attributes are treated as
+    the most authoritative, so child sections never overwrite a
+    parent-level value.
+    """
     out: dict[str, str] = {}
 
     def _walk(sec: dict[str, Any]) -> None:
@@ -114,6 +121,9 @@ def _collect_attributes(section: dict[str, Any]) -> dict[str, str]:
     return out
 
 
+# Substring-to-tag mapping for organism detection. See the equivalent
+# table in ``geo_soft.py``; the two parsers share the same set of
+# recognised model organisms.
 _SPECIES_FROM_NAME: tuple[tuple[str, str], ...] = (
     ("homo sapiens",              "human"),
     ("mus musculus",              "mouse"),
@@ -125,6 +135,10 @@ _SPECIES_FROM_NAME: tuple[tuple[str, str], ...] = (
 
 
 def _detect_species_from_attr(organism: str | None) -> str | None:
+    """Map a BioStudies ``Organism`` attribute value to a species tag.
+
+    Returns ``None`` when the value is missing or unrecognised.
+    """
     if not organism:
         return None
     lc = organism.strip().lower()
