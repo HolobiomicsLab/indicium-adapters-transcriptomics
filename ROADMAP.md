@@ -145,6 +145,30 @@ new benchmark papers reveal the need.
   cross-reference files per release. Join on FlyBase / WormBase
   id to populate ``ensembl`` for these rows.
 
+### v0.10.0 — Integration smoke tests + Protocol-conformance suite (done)
+- ``tests/test_protocol_conformance.py`` centralises the cross-cutting
+  invariants (discoverability, snake_case qualifiers, kebab-case
+  domain_id, IRI prefix-map validity, SHACL NodeShape presence).
+- ``examples/quickstart.py`` 30-line bring-up demo.
+- ``examples/test_on_papers.py`` real-paper smoke test (10 claims
+  from Warner + Tabula Muris with SHACL validation).
+
+### v0.11.0 — Real-corpus smoke test via SciLEx (planned)
+- Use SciLEx (Celian Ringwald's literature crawler) to pull a
+  ~10-paper diverse corpus covering the 6 supported organisms
+  (human / mouse / Nematostella / Drosophila / C. elegans / zebrafish)
+  across both modalities (bulk / single-cell).
+- Hand-extract ~3-5 claims per paper from titles + abstracts.
+- Expand ``examples/test_on_papers.py`` to run the full pipeline
+  end-to-end on this diverse corpus + report a coverage matrix.
+
+### v1.0.0 — Stable release (planned)
+- ``CITATION.cff`` (siblings don't have it — leading move).
+- README badges (CI / coverage / Python / license) + ontology-
+  provenance table modelled on the epigenomics adapter's table.
+- Tag ``v1.0.0`` + GitHub release notes synthesising every release
+  from v0.4.0.
+
 ### v0.9.0 — Broader ontology coverage for benchmark consistency (done)
 - 8 ontologies added via the existing REGISTRY-driven harvester:
   Tier-1 universal (MS / UO / MOD) + Tier-2 organism-paired anatomy

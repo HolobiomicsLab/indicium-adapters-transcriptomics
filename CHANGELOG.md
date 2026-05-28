@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.10.0 — Integration smoke tests + Protocol-conformance suite (2026-05-28)
+
+Quality + v1.0-prep release inspired by an audit of the sibling
+``indicium-adapters-epigenomics`` repo. Brings in the patterns the
+sibling adapter had at v0.1 that we hadn't yet adopted, without
+deferring v1.0 itself.
+
+### Added — Tests
+
+- ``tests/test_protocol_conformance.py`` (15 tests) — centralises
+  the cross-cutting Protocol invariants previously scattered in
+  ``test_bulk.py`` / ``test_singlecell.py``, **plus** depth checks
+  the sibling adapter has at v0.1:
+  - Every adapter exported by the package is discoverable via the
+    ``indicium.adapters`` entry-point group (catches missing entry-
+    point registration).
+  - ``domain_id`` is kebab-case (lowercase + hyphens).
+  - All ``qualifiers`` are snake_case — extraction prompts and SPARQL
+    templates depend on the convention.
+  - Every ``ontology_prefixes`` map entry dereferences to a valid
+    http(s) URI ending with the expected separator (``:`` / ``/`` /
+    ``_`` / ``#``).
+  - ``shacl_shapes()`` returns an ``rdflib.Graph`` with at least one
+    ``sh:NodeShape``.
+- Parametrised over ``ALL_ADAPTER_CLASSES`` — new sibling adapters
+  added to that tuple automatically inherit the full suite.
+
+### Added — Examples
+
+- ``examples/quickstart.py`` — 30-line "Hello World" runnable demo:
+  discover adapters → enrich one synthetic claim per adapter →
+  validate the composed SHACL shapes graph parses cleanly under
+  pyshacl. Distinct from the Warner-flavoured fuller demo. Use this
+  as the bring-up smoke test in a new environment.
+- ``examples/test_on_papers.py`` — pipeline integration smoke test
+  on hand-extracted claims from real papers (Warner et al. 2025
+  and Tabula Muris 2018 in v0.10.0). 10 claims across both
+  adapters; each goes through ``enrich_claim()`` → synthesised
+  RDF data graph → pyshacl validation against the composed shapes
+  graph. Proves the full claim-dict → CURIE → RDF → SHACL round-
+  trip is plumbed. **v0.11.0 will expand this to a SciLEx-driven
+  diverse 10-paper corpus across all 6 supported species.**
+
+### Notes
+
+- Sibling-audit verdict (vs ``indicium-adapters-epigenomics``):
+  we ship more (CHANGELOG, ROADMAP, OLS4 audit, 4 parsers, 6
+  species, ``scripts/check.ps1``) than they do at v0.1.0, but had
+  the conformance / quickstart / real-papers gaps that this
+  release closes. v1.0.0 will add: CITATION.cff, README badges,
+  ontology-provenance table, final tag.
+- No data added in v0.10.0 — concept index stays at 19 sources /
+  ~447 CURIEs from v0.9.0.
+
+### Tests
+
+- 126 / 126 pass, 92.35% coverage. The 15 new parametrised
+  conformance tests run in <1s.
+
 ## v0.9.0 — Broader ontology coverage for benchmark consistency (2026-05-28)
 
 Following Dina's call to "do it properly" before the upcoming ASB
