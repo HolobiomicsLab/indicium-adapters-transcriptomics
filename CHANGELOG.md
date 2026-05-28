@@ -1,5 +1,87 @@
 # Changelog
 
+## v0.6.2 — Drosophila / C. elegans / Zebrafish gene indexes (2026-05-28)
+
+### Added — three model organisms
+
+- `build_gene_index.py` now fetches NCBI's per-organism
+  ``gene_info`` files from Entrez (gzip-compressed TSV, ~1-2 MB
+  each) and joins each into the bundled `gene_index.tsv`:
+  - **Drosophila melanogaster** — 25,079 rows from
+    ``Drosophila_melanogaster.gene_info.gz``. 99.9% carry a
+    FlyBase accession (``FBgn…``).
+  - **Caenorhabditis elegans** — 46,927 rows from
+    ``Caenorhabditis_elegans.gene_info.gz``. 99.9% carry a
+    WormBase accession (``WBGene…``).
+  - **Danio rerio (zebrafish)** — 54,563 rows from
+    ``Danio_rerio.gene_info.gz``. ~50% carry a ZFIN accession,
+    ~40% carry an Ensembl gene id (``ENSDARG…``).
+- ``--no-other-species`` CLI flag skips the v0.6.2 step (regresses
+  to v0.6.1 6-source build). Per-organism cache paths configurable.
+- Bundled `gene_index.tsv` grows from 128k (v0.6.1) to **254,922 rows**.
+
+### Added — schema + runtime extension
+
+- Three new columns in the index schema: ``flybase``, ``wormbase``,
+  ``zfin``. Empty for rows of other species; populated for the
+  matching species rows.
+- ``_KNOWN_SPECIES`` extended to ``("human", "mouse", "zebrafish",
+  "drosophila", "celegans", "nematostella")``. The order encodes
+  the load-priority fallback when neither hint nor heuristic
+  disambiguates a symbol collision.
+- New direct-accession lookup paths (``_by_flybase``, ``_by_wormbase``,
+  ``_by_zfin``). All three accept both the bare id (``FBgn0000490``)
+  and the prefixed form (``FlyBase:FBgn0000490``).
+- ``_GENE_PRINCIPAL_CURIE_PREFIX`` priority extended to:
+  HGNC > MGI > FlyBase > WormBase > ZFIN > Ensembl > NCBIGene.
+- ``_GENE_XREF_COLUMNS`` extended likewise so xrefs surface the
+  organism-specific id.
+- New ``TRANSCRIPTOMICS_PREFIXES`` entries: ``FlyBase``,
+  ``WormBase``, ``ZFIN`` (mapped to identifiers.org URLs).
+
+### Changed — casing heuristic
+
+- New C. elegans rule: 3-4 lowercase letters + hyphen +
+  alphanumeric (``unc-22``, ``daf-16``, ``let-7``) → ``celegans``.
+  Most distinctive pattern across organisms.
+- **Lowercase-only token no longer maps to a species.** Pre-v0.6.2 a
+  lowercase ``mmp9`` fell through to human via the cross-listed
+  Nematostella row; v0.6.2 keeps that behaviour by treating
+  all-lowercase as ambiguous (could be a casual human/mouse typo
+  or a canonical zebrafish/drosophila symbol). Returns ``None`` so
+  the resolver falls through to the load-order rule (human first).
+  Zebrafish and Drosophila claims that aren't covered by the
+  single-candidate shortcut must pass ``species="zebrafish"`` or
+  ``species="drosophila"`` to disambiguate.
+
+### Tests
+
+- 6 new tests in ``test_bulk.py``:
+  - drosophila-unique symbol (``dpp``) → FlyBase via single-candidate
+  - ``Egfr`` with vs without ``species="drosophila"`` hint
+  - C. elegans heuristic on ``unc-22`` → WormBase
+  - zebrafish-unique symbol (``tncb``) → ZFIN
+  - zebrafish via ``species="zebrafish"`` hint (``nanog`` collision)
+  - direct-accession resolution for FlyBase / WormBase / ZFIN
+    accessions in claim slots.
+
+### Updated — demo
+
+- 3 new claims in ``examples/enrich_warner2018.py`` covering dpp,
+  unc-22, nanog+species. 18/18 claims enrich.
+
+### Notes
+
+- ``Ensembl`` is extracted from NCBI gene_info ``dbXrefs`` for
+  zebrafish (~40% of rows) but the field is absent for Drosophila
+  and C. elegans NCBI files (those use Ensembl Metazoa with a
+  different dbXrefs prefix). Backfilling Ensembl for the two
+  invertebrates is on a v0.6.3 follow-up.
+- UniProt is not consistently surfaced in NCBI gene_info for any
+  of the three organisms; ``uniprot`` is empty in v0.6.2 for all
+  three. The UniProt id mapping files give a clean cross-ref but
+  parsing them is another v0.6.3+ task.
+
 ## v0.6.1 — Mouse cross-references from MGI (Ensembl / Entrez / UniProt) (2026-05-28)
 
 ### Added

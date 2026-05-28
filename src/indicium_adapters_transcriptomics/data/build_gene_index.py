@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import sys
 from pathlib import Path
 
@@ -46,11 +47,56 @@ HGNC_URL_FALLBACK = (
 )
 
 OUT_COLUMNS = (
-    "symbol", "hgnc", "mgi", "ensembl", "ncbigene",
-    "nemve1", "nvertx", "uniprot", "species", "description",
+    "symbol", "hgnc", "mgi", "flybase", "wormbase", "zfin",
+    "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
+    "species", "description",
 )
 
 MGI_URL = "https://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
+
+# NCBI Gene catalogue per-organism gene_info files (v0.6.2). One TSV
+# per species, gzip-compressed, with a consistent column layout:
+#
+#   #tax_id  GeneID  Symbol  LocusTag  Synonyms  dbXrefs  chromosome
+#   map_location  description  type_of_gene  Symbol_from_nomenclature_authority
+#   Full_name_from_nomenclature_authority  Nomenclature_status
+#   Other_designations  Modification_date  Feature_type
+#
+# We read GeneID (Entrez), Symbol, Symbol_from_nomenclature_authority,
+# description and dbXrefs. dbXrefs is pipe-separated and contains
+# entries like ``FLYBASE:FBgn0040373`` / ``WormBase:WBGene00022277`` /
+# ``ZFIN:ZDB-GENE-980526-104`` / ``Ensembl:ENSDARG00000021948``.
+NCBI_GENE_INFO_URLS: dict[str, str] = {
+    "drosophila": (
+        "https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Invertebrates/"
+        "Drosophila_melanogaster.gene_info.gz"
+    ),
+    "celegans": (
+        "https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Invertebrates/"
+        "Caenorhabditis_elegans.gene_info.gz"
+    ),
+    "zebrafish": (
+        "https://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/Non-mammalian_vertebrates/"
+        "Danio_rerio.gene_info.gz"
+    ),
+}
+
+# Each species' organism-specific CURIE column. The parser writes the
+# matching column when it finds the right dbXrefs prefix.
+_SPECIES_ORG_COLUMN: dict[str, str] = {
+    "drosophila": "flybase",
+    "celegans":   "wormbase",
+    "zebrafish":  "zfin",
+}
+
+# Prefixes in dbXrefs to extract organism-specific gene IDs. Keys are
+# the species tag, values are the dbXrefs prefix (uppercase or
+# Camel-cased as NCBI writes them — checked case-insensitively).
+_SPECIES_ORG_DBXREF_PREFIXES: dict[str, tuple[str, ...]] = {
+    "drosophila": ("FLYBASE",),
+    "celegans":   ("WormBase",),
+    "zebrafish":  ("ZFIN",),
+}
 
 # MGI cross-reference reports (v0.6.1). All three are header-less,
 # tab-separated, positional. Schemas read from sampled rows on the
@@ -121,6 +167,73 @@ def _download_url(url: str, target: Path, *, tag: str) -> None:
 def _download_mgi(target: Path) -> None:
     """Download the MGI marker list (MRK_List2.rpt)."""
     _download_url(MGI_URL, target, tag="mgi")
+
+
+def _load_ncbi_gene_info(
+    path: Path, species: str
+) -> list[dict[str, str]]:
+    """Parse a gzip'd NCBI ``gene_info`` file for one organism and emit
+    rows ready for ``build()`` step 4. Extracts:
+
+    - ``symbol``: ``Symbol_from_nomenclature_authority`` if present
+      (not ``-``), otherwise ``Symbol``.
+    - ``ncbigene``: the GeneID column.
+    - ``species``: the supplied tag (``drosophila`` / ``celegans`` /
+      ``zebrafish``).
+    - The organism-specific CURIE column (``flybase`` / ``wormbase``
+      / ``zfin``) and ``ensembl``: extracted from ``dbXrefs``.
+    - ``description``: from the description column.
+
+    UniProt is not consistently surfaced in NCBI gene_info dbXrefs for
+    these organisms; rows ship with ``uniprot=""`` in v0.6.2 and may be
+    backfilled in a later release from UniProt's species-specific
+    cross-reference files.
+    """
+    org_col = _SPECIES_ORG_COLUMN[species]
+    org_prefixes = tuple(p.lower() for p in _SPECIES_ORG_DBXREF_PREFIXES[species])
+    rows: list[dict[str, str]] = []
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            if line.startswith("#") or not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 11:
+                continue
+            ncbigene = parts[1].strip()
+            symbol_raw = parts[2].strip()
+            dbxrefs_field = parts[5].strip()
+            description = parts[8].strip()
+            symbol_auth = parts[10].strip()
+            symbol = symbol_auth if symbol_auth and symbol_auth != "-" else symbol_raw
+            if not symbol or not ncbigene:
+                continue
+
+            org_id = ""
+            ensembl = ""
+            for xref in dbxrefs_field.split("|"):
+                if not xref or ":" not in xref:
+                    continue
+                key, _, val = xref.partition(":")
+                key_lc = key.strip().lower()
+                if not org_id and key_lc in org_prefixes:
+                    org_id = val.strip()
+                elif not ensembl and key_lc == "ensembl":
+                    ensembl = val.strip()
+
+            rows.append({
+                "symbol": symbol,
+                org_col: org_id,
+                "ensembl": ensembl,
+                "ncbigene": ncbigene,
+                "description": description,
+            })
+    print(
+        f"[{species}] indexed {len(rows):,} rows "
+        f"({sum(1 for r in rows if r.get(org_col)):,} with {org_col} xref, "
+        f"{sum(1 for r in rows if r.get('ensembl')):,} with ensembl xref)",
+        file=sys.stderr,
+    )
+    return rows
 
 
 def _load_mgi_xrefs(
@@ -315,6 +428,7 @@ def build(
     out_path: Path,
     *,
     mgi_xrefs: dict[str, dict[str, str]] | None = None,
+    other_species_rows: dict[str, list[dict[str, str]]] | None = None,
 ) -> int:
     """Read G2V2 + HGNC + MGI, join, emit the bundled TSV. Return row count.
 
@@ -374,6 +488,9 @@ def build(
                 "symbol": symbol,
                 "hgnc": (hgnc_row or {}).get("hgnc", ""),
                 "mgi": "",
+                "flybase": "",
+                "wormbase": "",
+                "zfin": "",
                 "ensembl": (hgnc_row or {}).get("ensembl", ""),
                 "ncbigene": (hgnc_row or {}).get("ncbigene", ""),
                 "nemve1": jgi,
@@ -393,6 +510,9 @@ def build(
                 "symbol": row["symbol"],
                 "hgnc": row["hgnc"],
                 "mgi": "",
+                "flybase": "",
+                "wormbase": "",
+                "zfin": "",
                 "ensembl": row["ensembl"],
                 "ncbigene": row["ncbigene"],
                 "nemve1": "",
@@ -426,6 +546,9 @@ def build(
                 "symbol": row["symbol"],
                 "hgnc": "",
                 "mgi": row["mgi"],
+                "flybase": "",
+                "wormbase": "",
+                "zfin": "",
                 "ensembl": ensembl,
                 "ncbigene": ncbigene,
                 "nemve1": "",
@@ -436,7 +559,32 @@ def build(
             })
             n_mgi += 1
 
-    n_total = n_nem_total + n_pure_hgnc + n_mgi
+        # Step 4 — other model organisms (v0.6.2): Drosophila / C. elegans
+        # / zebrafish from NCBI gene_info files.
+        n_other = {sp: 0 for sp in NCBI_GENE_INFO_URLS}
+        for species, rows in (other_species_rows or {}).items():
+            org_col = _SPECIES_ORG_COLUMN.get(species)
+            if org_col is None:
+                continue
+            for r in rows:
+                w.writerow({
+                    "symbol": r["symbol"],
+                    "hgnc": "",
+                    "mgi": "",
+                    "flybase": r.get("flybase", "") if org_col == "flybase" else "",
+                    "wormbase": r.get("wormbase", "") if org_col == "wormbase" else "",
+                    "zfin": r.get("zfin", "") if org_col == "zfin" else "",
+                    "ensembl": r.get("ensembl", ""),
+                    "ncbigene": r.get("ncbigene", ""),
+                    "nemve1": "",
+                    "nvertx": "",
+                    "uniprot": "",
+                    "species": species,
+                    "description": r.get("description", ""),
+                })
+                n_other[species] += 1
+
+    n_total = n_nem_total + n_pure_hgnc + n_mgi + sum(n_other.values())
     print(
         f"[out] wrote {out_path}: {n_total:,} rows total\n"
         f"       Nematostella-anchored : {n_nem_total:,}\n"
@@ -447,7 +595,10 @@ def build(
         f"       MGI (mouse)           : {n_mgi:,}\n"
         f"         with Ensembl xref   : {n_mgi_with_ensembl:,}\n"
         f"         with Entrez xref    : {n_mgi_with_entrez:,}\n"
-        f"         with UniProt xref   : {n_mgi_with_uniprot:,}",
+        f"         with UniProt xref   : {n_mgi_with_uniprot:,}\n"
+        f"       Drosophila            : {n_other.get('drosophila', 0):,}\n"
+        f"       C. elegans            : {n_other.get('celegans', 0):,}\n"
+        f"       Zebrafish             : {n_other.get('zebrafish', 0):,}",
         file=sys.stderr,
     )
     return n_total
@@ -506,6 +657,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip the v0.6.1 mouse Ensembl/Entrez/UniProt xref join "
              "(emits mouse rows with empty xref columns).",
     )
+    # v0.6.2 — other model organisms (Drosophila / C. elegans / Zebrafish).
+    parser.add_argument(
+        "--drosophila-cache", type=Path,
+        default=cache_dir / "Drosophila_melanogaster.gene_info.gz",
+        help="Where to cache the NCBI Drosophila gene_info.gz.",
+    )
+    parser.add_argument(
+        "--celegans-cache", type=Path,
+        default=cache_dir / "Caenorhabditis_elegans.gene_info.gz",
+        help="Where to cache the NCBI C. elegans gene_info.gz.",
+    )
+    parser.add_argument(
+        "--zebrafish-cache", type=Path,
+        default=cache_dir / "Danio_rerio.gene_info.gz",
+        help="Where to cache the NCBI zebrafish gene_info.gz.",
+    )
+    parser.add_argument(
+        "--no-other-species", action="store_true",
+        help="Skip the v0.6.2 Drosophila / C. elegans / zebrafish step "
+             "(emits human + mouse + Nematostella only).",
+    )
     args = parser.parse_args(argv)
     hgnc_path = args.hgnc_tsv
     if hgnc_path is None:
@@ -533,9 +705,24 @@ def main(argv: list[str] | None = None) -> int:
             args.mgi_uniprot_cache,
         )
 
+    other_species_rows: dict[str, list[dict[str, str]]] | None = None
+    if not args.no_other_species:
+        other_species_rows = {}
+        species_caches = {
+            "drosophila": args.drosophila_cache,
+            "celegans":   args.celegans_cache,
+            "zebrafish":  args.zebrafish_cache,
+        }
+        for species, cache in species_caches.items():
+            url = NCBI_GENE_INFO_URLS[species]
+            if not cache.is_file():
+                _download_url(url, cache, tag=species)
+            other_species_rows[species] = _load_ncbi_gene_info(cache, species)
+
     build(
         args.g2v2_xlsx, hgnc_path, mgi_path, args.out,
         mgi_xrefs=mgi_xrefs,
+        other_species_rows=other_species_rows,
     )
     return 0
 

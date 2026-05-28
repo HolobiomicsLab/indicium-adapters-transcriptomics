@@ -2,20 +2,29 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.6.0 ships two sibling adapters:
+v0.6.2 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
   accessions (GEO / SRA / ENA / ArrayExpress / ENCODE / BioProject / dbGaP /
-  BioStudies) and gene names from a bundled comprehensive index
-  (**~128,000 entries** as of v0.6.0): the full HGNC human catalogue
-  cross-referenced with the *Nematostella vectensis* G2V2 mapping (JGI
-  Nemve1 + NvERTx + NVE + Nv2g + UniProt), plus the full MGI mouse
-  marker catalogue (75k mouse genes). Symbol-level collisions
-  (``MAPK1`` ↔ ``Mapk1``) are disambiguated by an optional ``species``
-  hint on the claim or a casing heuristic (UPPER → human,
-  Title-case → mouse). MGI / Nemve1 / UniProt accessions resolve
-  directly.
+  BioStudies) and gene names from a bundled comprehensive
+  **multi-species** index (**~255,000 entries** as of v0.6.2):
+  - **Human** (HGNC, ~40k) cross-referenced with the
+    *Nematostella vectensis* G2V2 mapping (JGI Nemve1 + NvERTx +
+    NVE + Nv2g + UniProt).
+  - **Mouse** (MGI complete set, ~75k) with Ensembl / Entrez /
+    UniProt cross-refs from MGI's report files (v0.6.1).
+  - **Drosophila** (FlyBase, ~25k), **C. elegans** (WormBase,
+    ~47k), **Zebrafish** (ZFIN, ~55k) from NCBI's per-organism
+    gene_info files (v0.6.2).
+
+  Symbol-level collisions (``MAPK1`` ↔ ``Mapk1`` ↔ ``mapk1`` ↔
+  ``Mapk``) are disambiguated by an optional ``species`` claim hint
+  (``"human"`` / ``"mouse"`` / ``"drosophila"`` / ``"celegans"`` /
+  ``"zebrafish"`` / ``"nematostella"``) or a casing heuristic
+  (UPPER → human, Title-case → mouse, ``xxx-N`` → C. elegans).
+  Direct accession lookups (HGNC, MGI, FlyBase, WormBase, ZFIN,
+  Nemve1, UniProt) bypass the disambiguation entirely.
 - **`SingleCellTranscriptomicsAdapter`** — cell-resolution claims (cell-type
   markers, cluster enrichment, spatial localisation). Ships a small bundled
   UBERON anatomy index for the spatial-localisation qualifiers

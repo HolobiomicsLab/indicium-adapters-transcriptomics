@@ -116,21 +116,27 @@ new benchmark papers reveal the need.
   accession. ~85% of mouse rows ship Ensembl, ~60% ship Entrez,
   ~31% ship UniProt (SwissProt coverage limit).
 
-### v0.6.2 — Other model organisms (priority per user input)
-The most-used model organisms in transcriptomics beyond mouse
-(in roughly decreasing corpus prevalence):
-- **Drosophila melanogaster** — FlyBase symbols
-  (italic-mixed-case, e.g. ``mapk`` or ``Egfr``). CURIE prefix
-  ``FB:`` / ``FBgn:``.
-- **Caenorhabditis elegans** — WormBase symbols (italic-lowercase
-  with hyphens, e.g. ``unc-22``, ``daf-16``). CURIE prefix ``WB:``.
-- **Danio rerio (zebrafish)** — ZFIN symbols
-  (all-lowercase, e.g. ``mapk1``). CURIE prefix ``ZFIN:``.
+### v0.6.2 — Drosophila + C. elegans + Zebrafish (done)
+- ``build_gene_index.py`` fetches one NCBI gene_info file per
+  organism (~1-2 MB each) and emits species-tagged rows alongside
+  human / mouse / Nematostella. Total bundled index now 254,922
+  rows.
+- New schema columns ``flybase`` / ``wormbase`` / ``zfin`` + direct
+  accession lookup paths (both bare ids and prefixed CURIE forms
+  accepted).
+- C. elegans casing heuristic added (xxx-N pattern). Drosophila
+  and zebrafish rely on the optional ``species`` claim hint or
+  the single-candidate shortcut — the lowercase-only space is too
+  ambiguous to auto-route reliably.
 
-The casing-heuristic from v0.6.0 needs per-organism rules added:
-all-lowercase → zebrafish, lowercase-with-hyphens → C. elegans,
-mixed (no canonical pattern) → Drosophila. Or we lean harder on
-the optional ``species`` claim hint to resolve ambiguity.
+### v0.6.3 — Cross-ref polish for invertebrate organisms (planned)
+- Extract Ensembl gene ids for Drosophila and C. elegans (NCBI
+  gene_info uses ``Ensembl_Metazoa`` instead of ``Ensembl`` for
+  these two — needs a second dbXrefs prefix in the parser).
+- Backfill UniProt accessions for Drosophila / C. elegans /
+  zebrafish (and possibly v0.6.0's MGI rows that lacked SwissProt
+  coverage). Source: UniProt's species-specific cross-reference
+  files at https://ftp.uniprot.org/.
 
 ### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
 - `data/build_cl_concept_index.py` harvests CL for the cell-type

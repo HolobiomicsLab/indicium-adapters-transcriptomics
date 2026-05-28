@@ -16,6 +16,7 @@ as a dict (or ``None``):
 from __future__ import annotations
 
 import csv
+import re
 from importlib.resources import files
 from typing import Final
 
@@ -26,6 +27,9 @@ _GENE_INDEX_COLUMNS: Final[tuple[str, ...]] = (
     "symbol",
     "hgnc",
     "mgi",
+    "flybase",
+    "wormbase",
+    "zfin",
     "ensembl",
     "ncbigene",
     "nemve1",
@@ -36,11 +40,15 @@ _GENE_INDEX_COLUMNS: Final[tuple[str, ...]] = (
 )
 
 
-# Recognised species tags (column ``species``). The order encodes the
-# fallback priority used by ``GeneIndex.lookup`` when neither an
-# explicit hint nor the casing heuristic can disambiguate a collision.
-# Human first because it dominates transcriptomics-paper claims.
-_KNOWN_SPECIES: Final[tuple[str, ...]] = ("human", "mouse", "nematostella")
+# Recognised species tags. Order encodes the fallback priority used by
+# ``GeneIndex.lookup`` when neither an explicit hint nor the casing
+# heuristic can disambiguate a collision. Human first because it
+# dominates transcriptomics-paper claims; mouse second; then the
+# v0.6.2 model organisms in rough corpus-prevalence order
+# (zebrafish > Drosophila > C. elegans for transcriptomics data sets).
+_KNOWN_SPECIES: Final[tuple[str, ...]] = (
+    "human", "mouse", "zebrafish", "drosophila", "celegans", "nematostella",
+)
 
 
 def _load_gene_index_rows() -> list[dict[str, str]]:
@@ -56,33 +64,54 @@ def _load_gene_index_rows() -> list[dict[str, str]]:
         return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
 
 
+# C. elegans symbol pattern: three lowercase letters + hyphen + 1+
+# alphanumeric chars. Examples: ``unc-22``, ``daf-16``, ``let-7``,
+# ``gld-1``. Very distinctive — no other organism uses this layout.
+_C_ELEGANS_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^[a-z]{3,4}-[a-zA-Z0-9]+$"
+)
+
+
 def _infer_species_from_casing(token: str) -> str | None:
     """Casing heuristic used when no explicit species hint is given.
 
-    Convention in the field:
+    Conventions in the field (per-organism):
 
-    * **Human (HGNC)** symbols are written ALL UPPERCASE: ``MAPK1``,
-      ``WNT4``, ``CD3E``.
-    * **Mouse (MGI)** symbols are written Title-cased — first letter
-      upper, the rest as in HGNC but lower: ``Mapk1``, ``Wnt4``,
-      ``Cd3e``.
-    * **Nematostella** (Nemve1) ids are written all-lowercase with a
-      dotted gene-model id (``gw.51.96.1``), so they never come
-      through this path.
+    * **Human (HGNC)** — ALL UPPERCASE: ``MAPK1``, ``WNT4``, ``CD3E``.
+    * **Mouse (MGI)** — Title-cased: ``Mapk1``, ``Wnt4``, ``Cd3e``.
+    * **C. elegans (WormBase)** — three (occasionally four) lowercase
+      letters + hyphen + alphanumeric: ``unc-22``, ``daf-16``,
+      ``let-7``. Very distinctive — no other organism uses this
+      layout.
+    * **Zebrafish (ZFIN)** and **Drosophila (FlyBase)** — both use
+      lowercase / mixed-case conventions that are NOT
+      machine-distinguishable from a casual lowercase / Title-case
+      typo of a human or mouse symbol. They are intentionally
+      **not** matched by the heuristic — claims targeting these
+      organisms must pass ``species="zebrafish"`` or
+      ``species="drosophila"`` explicitly. Without a hint a
+      lowercase ``mmp9`` falls through to the load-order fallback
+      and resolves to human via the cross-listed rule, preserving
+      v0.1.x case-insensitive forgiveness.
+    * **Nematostella** (Nemve1) ids carry dots (``gw.51.96.1``) and
+      never come through this path — they hit the by-nemve1 lookup
+      branch instead.
 
-    Returns ``"human"`` / ``"mouse"`` / ``None`` (ambiguous — e.g.
-    all-lowercase or mixed case that doesn't match the convention).
-    The caller falls back to the species-hint or load-order rules.
+    Returns ``None`` when the casing matches no high-confidence
+    convention.
     """
     if not token or not token[0].isalpha():
         return None
+    # C. elegans rule first — most distinctive (mandatory hyphen).
+    if _C_ELEGANS_PATTERN.match(token):
+        return "celegans"
     if token.isupper():
         return "human"
     if token[0].isupper() and not token.isupper():
-        # Title-cased: first letter upper, rest contains lowercase.
-        # Reject if a hyphen / dot / space follows a lowercase prefix
-        # (Nemve1-style ids, accessions, etc.).
         return "mouse"
+    # All-lowercase is ambiguous (zebrafish canonical / drosophila
+    # canonical / lowercase typo of a human or mouse symbol) — defer
+    # to the species hint or load-order fallback. See class docstring.
     return None
 
 
@@ -124,6 +153,24 @@ class GeneIndex:
         self._by_mgi: dict[str, dict[str, str]] = {
             row["mgi"]: row for row in rows if row.get("mgi")
         }
+        # v0.6.2 organism-specific accession indices. Stored under the
+        # bare id (FBgn0003079) and also under the prefixed CURIE form
+        # (FlyBase:FBgn0003079) so callers can pass either spelling.
+        self._by_flybase: dict[str, dict[str, str]] = {}
+        for row in rows:
+            if v := row.get("flybase"):
+                self._by_flybase[v] = row
+                self._by_flybase[f"FlyBase:{v}"] = row
+        self._by_wormbase: dict[str, dict[str, str]] = {}
+        for row in rows:
+            if v := row.get("wormbase"):
+                self._by_wormbase[v] = row
+                self._by_wormbase[f"WormBase:{v}"] = row
+        self._by_zfin: dict[str, dict[str, str]] = {}
+        for row in rows:
+            if v := row.get("zfin"):
+                self._by_zfin[v] = row
+                self._by_zfin[f"ZFIN:{v}"] = row
 
     def lookup(
         self, name: str, *, species: str | None = None
@@ -159,6 +206,13 @@ class GeneIndex:
             return row
         if row := self._by_mgi.get(token):
             return row
+        # v0.6.2 model-organism accession paths.
+        if row := self._by_flybase.get(token):
+            return row
+        if row := self._by_wormbase.get(token):
+            return row
+        if row := self._by_zfin.get(token):
+            return row
         return None
 
     @staticmethod
@@ -175,8 +229,11 @@ class GeneIndex:
         return such a row when the human species is wanted, even
         though the row's primary tag is ``nematostella``."""
         canonical_col = {
-            "human": "hgnc",
-            "mouse": "mgi",
+            "human":        "hgnc",
+            "mouse":        "mgi",
+            "drosophila":   "flybase",
+            "celegans":     "wormbase",
+            "zebrafish":    "zfin",
             "nematostella": "nemve1",
         }.get(wanted)
         # First pass: prefer an exact species-tag match (rows whose
@@ -402,13 +459,17 @@ CONCEPT_INDEX: Final[ConceptIndex] = ConceptIndex(_load_concept_index_rows())
 _GENE_PRINCIPAL_CURIE_PREFIX: Final[tuple[tuple[str, str | None], ...]] = (
     ("hgnc", None),
     ("mgi", None),
+    ("flybase", "FlyBase"),
+    ("wormbase", "WormBase"),
+    ("zfin", "ZFIN"),
     ("ensembl", "ENSEMBL"),
     ("ncbigene", "NCBIGene"),
 )
 
 # Xref columns surfaced under ``xrefs[slot]``. Bare ids (no prefixing).
 _GENE_XREF_COLUMNS: Final[tuple[str, ...]] = (
-    "hgnc", "mgi", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
+    "hgnc", "mgi", "flybase", "wormbase", "zfin",
+    "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
 )
 
 

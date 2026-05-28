@@ -35,6 +35,9 @@ IAO: Final[str] = "http://purl.obolibrary.org/obo/IAO_"
 # Gene / transcript identifier authorities
 HGNC: Final[str] = "https://identifiers.org/hgnc:"
 MGI: Final[str] = "https://identifiers.org/MGI:"
+FLYBASE: Final[str] = "https://identifiers.org/flybase:"
+WORMBASE: Final[str] = "https://identifiers.org/wormbase:"
+ZFIN: Final[str] = "https://identifiers.org/zfin:"
 ENSEMBL: Final[str] = "https://identifiers.org/ensembl:"
 ENTREZ_GENE: Final[str] = "https://identifiers.org/ncbigene:"
 REFSEQ: Final[str] = "https://identifiers.org/refseq:"
@@ -73,6 +76,9 @@ TRANSCRIPTOMICS_PREFIXES: Final[dict[str, str]] = {
     # Gene / transcript identifiers
     "HGNC": HGNC,
     "MGI": MGI,
+    "FlyBase": FLYBASE,
+    "WormBase": WORMBASE,
+    "ZFIN": ZFIN,
     "ENSEMBL": ENSEMBL,
     "NCBIGene": ENTREZ_GENE,
     "RefSeq": REFSEQ,

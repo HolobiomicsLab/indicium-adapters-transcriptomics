@@ -119,6 +119,26 @@ CLAIMS: Final[list[ClaimSpec]] = [
          "object": "intestine", "species": "mouse"},
         "v0.6.0 species hint: explicit override even when symbol is UPPERCASE",
     ),
+    # --- v0.6.2: Drosophila / C. elegans / Zebrafish -----------------------
+    (
+        "bulk",
+        {"subject": "dpp", "qualifier": "expressed_in",
+         "object": "wing_disc"},
+        "v0.6.2 drosophila: dpp (decapentaplegic) → FlyBase, single-candidate path",
+    ),
+    (
+        "bulk",
+        {"subject": "unc-22", "qualifier": "marker_of",
+         "object": "body_wall_muscle"},
+        "v0.6.2 C. elegans: unc-22 → WormBase via xxx-N heuristic",
+    ),
+    (
+        "bulk",
+        {"subject": "nanog", "qualifier": "marker_of_cell_type",
+         "object": "embryonic_stem_cell", "species": "zebrafish"},
+        "v0.6.2 zebrafish via species hint: nanog → ZFIN "
+        "(no hint would default to human via Nematostella cross-listing)",
+    ),
     # --- Single-cell: anatomy + new gene resolver (v0.4.0) -----------------
     (
         "singlecell",

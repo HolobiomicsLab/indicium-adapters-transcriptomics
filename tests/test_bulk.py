@@ -345,6 +345,111 @@ def test_mouse_row_carries_full_xref_map():
     assert xrefs.get("uniprot")
 
 
+# --- v0.6.2: Drosophila / C. elegans / Zebrafish ---------------------------
+
+
+def test_drosophila_unique_symbol_resolves_to_flybase():
+    """v0.6.2: a drosophila-unique gene name (``dpp`` = decapentaplegic,
+    no overlap with other organisms) resolves to its FlyBase CURIE
+    without needing a species hint — the single-candidate shortcut in
+    GeneIndex.lookup picks the only row."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "dpp",
+        "qualifier": "expressed_in",
+        "object": "wing_disc",
+    })
+    assert out["ontology_terms"]["subject"] == "FlyBase:FBgn0000490"
+
+
+def test_drosophila_via_species_hint_disambiguates_collision():
+    """``Egfr`` is Title-cased so the heuristic picks mouse; a
+    species="drosophila" hint overrides and routes to FlyBase."""
+    a = BulkTranscriptomicsAdapter()
+    # Without hint — Title-case → mouse.
+    out = a.enrich_claim({
+        "subject": "Egfr",
+        "qualifier": "expressed_in",
+        "object": "wing_disc",
+    })
+    assert out["ontology_terms"]["subject"] == "MGI:95294"
+
+    # With hint — overrides to drosophila.
+    out = a.enrich_claim({
+        "subject": "Egfr",
+        "qualifier": "expressed_in",
+        "object": "wing_disc",
+        "species": "drosophila",
+    })
+    assert out["ontology_terms"]["subject"] == "FlyBase:FBgn0003731"
+
+
+def test_celegans_xxx_dash_n_pattern_triggers_heuristic():
+    """v0.6.2 casing heuristic recognises the C. elegans symbol
+    pattern (3-4 lowercase letters + hyphen + alphanumeric) — most
+    distinctive convention across the supported organisms.
+    ``unc-22`` → WormBase:WBGene00006759."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "unc-22",
+        "qualifier": "expressed_in",
+        "object": "muscle",
+    })
+    assert out["ontology_terms"]["subject"] == "WormBase:WBGene00006759"
+
+
+def test_zebrafish_unique_symbol_resolves_via_single_candidate():
+    """``tncb`` (tenascin Cb) is zebrafish-unique in the bundled
+    index. Single-candidate lookup short-circuits the heuristic and
+    returns the only row."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "tncb",
+        "qualifier": "expressed_in",
+        "object": "myoseptum",
+    })
+    assert out["ontology_terms"]["subject"] == "ZFIN:ZDB-GENE-980526-104"
+
+
+def test_zebrafish_via_species_hint_for_collision():
+    """``nanog`` exists as a Nematostella-anchored row (with human
+    HGNC ortholog), a mouse Title-case row, and a zebrafish row.
+    Without a hint the lowercase casing is ambiguous so the
+    load-order fallback picks human (cross-listed via the
+    Nematostella row's hgnc ortholog). With ``species="zebrafish"``
+    the resolver routes to ZFIN."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "nanog",
+        "qualifier": "marker_of",
+        "object": "embryonic_stem_cell",
+        "species": "zebrafish",
+    })
+    assert out["ontology_terms"]["subject"] == "ZFIN:ZDB-GENE-030131-5486"
+
+
+def test_organism_accessions_resolve_directly():
+    """FlyBase / WormBase / ZFIN accessions in claim slots resolve
+    via the direct-accession lookup paths, bypassing the symbol
+    disambiguation entirely. The lookup accepts both the bare id
+    (``FBgn0000490``) and the prefixed form (``FlyBase:FBgn0000490``)."""
+    a = BulkTranscriptomicsAdapter()
+    for token, expected in (
+        ("FBgn0000490",         "FlyBase:FBgn0000490"),
+        ("FlyBase:FBgn0000490", "FlyBase:FBgn0000490"),
+        ("WBGene00006759",      "WormBase:WBGene00006759"),
+        ("ZDB-GENE-980526-104", "ZFIN:ZDB-GENE-980526-104"),
+    ):
+        out = a.enrich_claim({
+            "subject": token,
+            "qualifier": "expressed_in",
+            "object": "x",
+        })
+        assert out["ontology_terms"]["subject"] == expected, (
+            f"{token!r}: expected {expected}, got {out['ontology_terms']['subject']}"
+        )
+
+
 def test_mouse_only_symbol_resolves_without_collision():
     """A mouse-specific gene with no human equivalent of the same
     name (the gene ``Xist`` exists in both species but its mouse
