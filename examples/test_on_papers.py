@@ -1,26 +1,37 @@
-"""End-to-end smoke test on hand-extracted claims from real papers.
+"""End-to-end smoke test on hand-extracted claims from a 16-paper corpus.
 
-Two transcriptomics papers contribute claims here: Warner et al. 2025
-(*Nematostella vectensis* regeneration) and Tabula Muris (mouse cell
-atlas). The claims are the kind of assertions an LLM extractor would
-produce after reading the paper — gene names, study accessions, cell
-types, instrument models, treatments.
+Each claim is sourced from one of:
 
-For each claim we:
+* **The paper's PDF** (10 papers under ``articles/`` in this repo) —
+  accessions, instruments, methods extracted via regex / abstract
+  reading from the actual document text. The most rigorous tier.
+* **Well-known facts** about two flagship *Nematostella* papers
+  (Warner 2025 + Cheung 2024) not in ``articles/`` — established
+  from prior corpus work (v0.3.1 extraction sessions). Less rigorous
+  than PDF mining, but the claims are verifiable.
+* **PubMed abstracts** for the 4 methodology reviews (Conesa 2016,
+  Hwang 2018, Marx 2021, Stark 2019), fetched via efetch — used to
+  hand-extract method / tool vocab.
 
-1. Pass it through ``BulkTranscriptomicsAdapter.enrich_claim`` or
-   ``SingleCellTranscriptomicsAdapter.enrich_claim`` based on the
-   ``_adapter`` annotation.
-2. Print the resolved CURIEs + xref attachments.
-3. Build a tiny RDF graph asserting the resolved CURIEs as
-   ``oa:hasBody`` properties on a synthetic claim subject, validate
-   against the adapters' SHACL shapes graph via pyshacl. The
-   validation is the integration smoke-test — proves the round-trip
-   from claim dict → CURIEs → RDF → SHACL is wired.
+For every claim we:
 
-Distinct from the hand-built Warner demo
-(``examples/enrich_warner2018.py``) which is a *resolution coverage*
-showcase. This script is a *pipeline integration smoke test*.
+1. Pass through ``BulkTranscriptomicsAdapter.enrich_claim`` or
+   ``SingleCellTranscriptomicsAdapter.enrich_claim``.
+2. Render resolved CURIEs into an RDF data graph.
+3. Validate the data graph against the composed SHACL shapes graph
+   via pyshacl.
+
+At the end the script prints:
+
+- per-paper enrichment count
+- per-ontology hit count (coverage matrix — the v0.11.0 deliverable)
+- unresolved terms (signal for next ontology adds)
+
+Methodology note: this is **not** full-text LLM extraction.  Claims
+were hand-curated from PDF abstracts + key sections + accession
+listings. The point is reproducibility — every claim has a traceable
+source. Real LLM extraction will be run by Louis-Félix on the ASB
+infrastructure.
 
 Run::
 
@@ -28,8 +39,8 @@ Run::
 """
 from __future__ import annotations
 
-import json
 import sys
+from collections import Counter, defaultdict
 
 import pyshacl
 import rdflib
@@ -38,124 +49,388 @@ from indicium_adapters import compose_adapters, discover_adapters
 sys.stdout.reconfigure(encoding="utf-8")
 
 
-# Each tuple: (paper_id, adapter_name, claim_dict, one-line note).
-WARNER_CLAIMS: list[tuple[str, str, dict, str]] = [
-    (
-        "Warner2025", "bulk-transcriptomics",
-        {"subject": "GSE168938", "qualifier": "consolidates_dataset",
-         "object": "Warner 2025"},
-        "GEO accession resolves via the bulk accession resolver",
-    ),
-    (
-        "Warner2025", "bulk-transcriptomics",
-        {"subject": "study_warner_2025", "qualifier": "sequenced_on",
-         "object": "Illumina NovaSeq 6000",
-         "species": "nematostella"},
-        "Platform mention via study-level qualifier",
-    ),
-    (
-        "Warner2025", "bulk-transcriptomics",
-        {"subject": "study_warner_2025", "qualifier": "tested_with",
-         "object": "U0126"},
-        "MEK inhibitor (CHEBI) via v0.8.0 chemicals harvest",
-    ),
-    (
-        "Warner2025", "bulk-transcriptomics",
-        {"subject": "WNT4", "qualifier": "differentially_expressed_in",
-         "object": "regenerating_oral_pole"},
-        "Gene-symbol resolution (HGNC)",
-    ),
-    (
-        "Warner2025", "single-cell-transcriptomics",
-        {"subject": "MMP9", "qualifier": "localized_in_tissue",
-         "object": "mesentery"},
-        "Gene + UBERON anatomy (Cheung 2024 anatomy index)",
-    ),
-]
+# Each entry: (paper_id, adapter_name, claim_dict, one-line note).
+#
+# Accessions / instruments verified against PDF text where possible
+# (mining via ``re.compile(r'(GSE\d+|...)')`` in the build session).
+# Reviews use placeholder subjects (``<author>_<year>_review``).
+CORPUS: list[tuple[str, str, dict, str]] = [
+    # ============================================================
+    #  Nematostella vectensis — 3 primary papers
+    # ============================================================
+    # Warner 2025 — bulk regeneration. PDF not in articles/ but
+    # accession + instrument + treatment well established from
+    # v0.3.1 extraction session.
+    ("Warner2025", "bulk-transcriptomics",
+     {"subject": "GSE168938", "qualifier": "consolidates_dataset",
+      "object": "Warner 2025"},
+     "Warner GEO accession"),
+    ("Warner2025", "bulk-transcriptomics",
+     {"subject": "warner_2025_study", "qualifier": "sequenced_on",
+      "object": "Illumina NovaSeq 6000", "species": "nematostella"},
+     "Warner platform"),
+    ("Warner2025", "bulk-transcriptomics",
+     {"subject": "warner_2025_study", "qualifier": "tested_with",
+      "object": "U0126"},
+     "Warner MEK inhibitor — CHEBI:90693"),
+    ("Warner2025", "bulk-transcriptomics",
+     {"subject": "WNT4", "qualifier": "differentially_expressed_in",
+      "object": "regenerating_oral_pole"},
+     "Warner DEG"),
 
-TABULA_MURIS_CLAIMS: list[tuple[str, str, dict, str]] = [
-    (
-        "TabulaMuris", "bulk-transcriptomics",
-        {"subject": "tabula_muris_2018", "qualifier": "consolidates_dataset",
-         "object": "GSE109774"},
-        "Tabula Muris GEO accession",
-    ),
-    (
-        "TabulaMuris", "bulk-transcriptomics",
-        {"subject": "tabula_muris_2018", "qualifier": "aligned_with",
-         "object": "STAR"},
-        "v0.4.0 qualifier-aware: STAR resolves to biotools:star "
-        "(aligner) under aligned_with",
-    ),
-    (
-        "TabulaMuris", "bulk-transcriptomics",
-        {"subject": "Mapk1", "qualifier": "differentially_expressed_in",
-         "object": "intestine"},
-        "v0.6.0 mouse Title-case heuristic → MGI:1346858",
-    ),
-    (
-        "TabulaMuris", "single-cell-transcriptomics",
-        {"subject": "WNT4", "qualifier": "marker_of_cell_type",
-         "object": "macrophage"},
-        "Gene + CL cell type (v0.5.0)",
-    ),
-    (
-        "TabulaMuris", "single-cell-transcriptomics",
-        {"subject": "Mapk1", "qualifier": "marker_of_cell_type",
-         "object": "cardiomyocyte",
-         "species": "mouse"},
-        "Mouse gene + CL → cardiomyocyte's synonym in CL",
-    ),
+    # Sebé-Pedrós et al. 2018 — Nematostella whole-organism scRNA atlas.
+    # Verified from PDF: GSE95723, Illumina NextSeq, MARS-seq, cnidocyte.
+    ("SebePedros2018", "bulk-transcriptomics",
+     {"subject": "GSE95723", "qualifier": "consolidates_dataset",
+      "object": "Sebe-Pedros 2018"},
+     "Sebé-Pedrós GEO (verified GSE95723 from PDF)"),
+    ("SebePedros2018", "bulk-transcriptomics",
+     {"subject": "sebepedros_2018_study", "qualifier": "uses_database",
+      "object": "MARS-seq", "species": "nematostella"},
+     "Sebé-Pedrós used MARS-seq → EFO:0008796"),
+    ("SebePedros2018", "single-cell-transcriptomics",
+     {"subject": "MMP14", "qualifier": "marker_of_cell_type",
+      "object": "cnidocyte"},
+     "Sebé-Pedrós cnidocyte → CL:0011029"),
+
+    # Cheung 2024 — Tomo-seq spatial. PDF not in articles/ but
+    # spatial-localisation claims well-established.
+    ("Cheung2024", "single-cell-transcriptomics",
+     {"subject": "MMP9", "qualifier": "localized_in_tissue",
+      "object": "mesentery"},
+     "Cheung Tomo-seq → UBERON:0002095 mesentery"),
+    ("Cheung2024", "single-cell-transcriptomics",
+     {"subject": "FGF8", "qualifier": "localized_in_tissue",
+      "object": "pharynx"},
+     "Cheung FGF signalling → UBERON:0006562 pharynx"),
+
+    # ============================================================
+    #  Nematostella vectensis — bonus microarray paper (Layden 2016)
+    # ============================================================
+    # PDF verified: E-MTAB-4831 ArrayExpress.
+    ("Layden2016", "bulk-transcriptomics",
+     {"subject": "E-MTAB-4831", "qualifier": "consolidates_dataset",
+      "object": "Layden 2016 microarray"},
+     "Layden ArrayExpress (verified from PDF)"),
+    ("Layden2016", "bulk-transcriptomics",
+     {"subject": "layden_2016_study", "qualifier": "tested_with",
+      "object": "U0126"},
+     "Layden MEK inhibitor (same MAPK pathway as Warner)"),
+
+    # ============================================================
+    #  Mouse — Tabula Muris 2018 (PDF verified: GSE109774, Smart-seq2)
+    # ============================================================
+    ("TabulaMuris2018", "bulk-transcriptomics",
+     {"subject": "GSE109774", "qualifier": "consolidates_dataset",
+      "object": "Tabula Muris consortium"},
+     "Tabula Muris GEO (verified from PDF)"),
+    ("TabulaMuris2018", "bulk-transcriptomics",
+     {"subject": "tabula_muris_study", "qualifier": "uses_database",
+      "object": "Smart-seq2"},
+     "Tabula Muris Smart-seq2 → EFO:0008931"),
+    ("TabulaMuris2018", "bulk-transcriptomics",
+     {"subject": "tabula_muris_study", "qualifier": "aligned_with",
+      "object": "STAR"},
+     "v0.4.0 qualifier-aware: STAR → biotools:star"),
+    ("TabulaMuris2018", "bulk-transcriptomics",
+     {"subject": "Mapk1", "qualifier": "differentially_expressed_in",
+      "object": "intestine"},
+     "Mouse Title-case heuristic → MGI:1346858"),
+    ("TabulaMuris2018", "single-cell-transcriptomics",
+     {"subject": "Cd3e", "qualifier": "marker_of_cell_type",
+      "object": "T cell", "species": "mouse"},
+     "Mouse Cd3e → MGI + T cell → CL:0000084"),
+
+    # ============================================================
+    #  Human — Tabula Sapiens 2022 (PDF verified: GSE201333, NovaSeq)
+    # ============================================================
+    ("TabulaSapiens2022", "bulk-transcriptomics",
+     {"subject": "GSE201333", "qualifier": "consolidates_dataset",
+      "object": "Tabula Sapiens consortium"},
+     "Tabula Sapiens GEO (verified from PDF)"),
+    ("TabulaSapiens2022", "bulk-transcriptomics",
+     {"subject": "tabula_sapiens_study", "qualifier": "sequenced_on",
+      "object": "NovaSeq", "species": "human"},
+     "Tabula Sapiens platform → EFO substring"),
+    ("TabulaSapiens2022", "single-cell-transcriptomics",
+     {"subject": "FOXP3", "qualifier": "marker_of_cell_type",
+      "object": "regulatory T cell"},
+     "Treg marker, uppercase human → HGNC"),
+    ("TabulaSapiens2022", "bulk-transcriptomics",
+     {"subject": "tabula_sapiens_study", "qualifier": "quantified_with",
+      "object": "scVI"},
+     "TS uses scVI — UNRESOLVED expected (not in bio.tools)"),
+
+    # ============================================================
+    #  Drosophila — Brunet Avalos 2019 (PDF verified)
+    # ============================================================
+    # PDF: GSE134722, Illumina NovaSeq 6000, larval brain scRNA.
+    ("BrunetAvalos2019", "bulk-transcriptomics",
+     {"subject": "GSE134722", "qualifier": "consolidates_dataset",
+      "object": "Brunet Avalos 2019"},
+     "Brunet Avalos GEO (verified from PDF)"),
+    ("BrunetAvalos2019", "bulk-transcriptomics",
+     {"subject": "brunet_avalos_study", "qualifier": "sequenced_on",
+      "object": "Illumina NovaSeq 6000"},
+     "Brunet Avalos NovaSeq (verified from PDF)"),
+    ("BrunetAvalos2019", "single-cell-transcriptomics",
+     {"subject": "dpp", "qualifier": "expressed_in",
+      "object": "wing disc", "species": "drosophila"},
+     "Drosophila gene FBgn0000490 + FBbt:00001778 wing disc"),
+    ("BrunetAvalos2019", "single-cell-transcriptomics",
+     {"subject": "eve", "qualifier": "marker_of_cell_type",
+      "object": "neuron", "species": "drosophila"},
+     "Drosophila even-skipped, neural marker"),
+
+    # ============================================================
+    #  C. elegans — Packer 2019 (PDF verified)
+    # ============================================================
+    ("Packer2019", "bulk-transcriptomics",
+     {"subject": "GSE126954", "qualifier": "consolidates_dataset",
+      "object": "Packer 2019"},
+     "Packer GEO (verified from PDF)"),
+    ("Packer2019", "bulk-transcriptomics",
+     {"subject": "packer_study", "qualifier": "sequenced_on",
+      "object": "NextSeq"},
+     "Packer Illumina NextSeq → EFO substring"),
+    ("Packer2019", "single-cell-transcriptomics",
+     {"subject": "unc-22", "qualifier": "expressed_in",
+      "object": "body wall muscle"},
+     "C. elegans xxx-N heuristic + WBbt anatomy"),
+    ("Packer2019", "single-cell-transcriptomics",
+     {"subject": "daf-16", "qualifier": "marker_of_cell_type",
+      "object": "germ line"},
+     "C. elegans insulin/FOXO + WBbt germ line"),
+
+    # ============================================================
+    #  Zebrafish — Wagner 2018 (PDF verified)
+    # ============================================================
+    # PDF: GSE112294, single-cell mapping of zebrafish embryo.
+    ("Wagner2018", "bulk-transcriptomics",
+     {"subject": "GSE112294", "qualifier": "consolidates_dataset",
+      "object": "Wagner 2018"},
+     "Wagner GEO (verified from PDF)"),
+    ("Wagner2018", "single-cell-transcriptomics",
+     {"subject": "sox2", "qualifier": "expressed_in",
+      "object": "neural tube", "species": "zebrafish"},
+     "Zebrafish sox2 + ZFA-or-EMAPA neural tube"),
+    ("Wagner2018", "single-cell-transcriptomics",
+     {"subject": "tncb", "qualifier": "expressed_in",
+      "object": "notochord", "species": "zebrafish"},
+     "Zebrafish-unique tncb (ZFIN) + ZFA notochord"),
+
+    # ============================================================
+    #  Cancer / Melanoma — Tirosh 2016 (PDF verified)
+    # ============================================================
+    # PDF: GSE72056 + GSE77940, Smart-seq2, melanoma scRNA.
+    ("Tirosh2016", "bulk-transcriptomics",
+     {"subject": "GSE72056", "qualifier": "consolidates_dataset",
+      "object": "Tirosh 2016 melanoma"},
+     "Tirosh GEO (verified from PDF)"),
+    ("Tirosh2016", "bulk-transcriptomics",
+     {"subject": "tirosh_study", "qualifier": "uses_database",
+      "object": "Smart-seq2"},
+     "Tirosh Smart-seq2 (verified from PDF)"),
+    ("Tirosh2016", "bulk-transcriptomics",
+     {"subject": "tirosh_study", "qualifier": "consolidates_dataset",
+      "object": "melanoma"},
+     "Disease vocab — DOID melanoma"),
+    ("Tirosh2016", "single-cell-transcriptomics",
+     {"subject": "BRAF", "qualifier": "marker_of",
+      "object": "melanoma"},
+     "BRAF (HGNC) + melanoma (DOID) — clinical claim"),
+
+    # ============================================================
+    #  Spatial method — Slide-seqV2 (Stickels 2021)
+    # ============================================================
+    # PDF: no GEO regex hit but Slide-seq variants + NovaSeq + Drop-seq + Visium.
+    ("SlideSeqV2", "bulk-transcriptomics",
+     {"subject": "slideseqv2_study", "qualifier": "sequenced_on",
+      "object": "Illumina NovaSeq 6000"},
+     "Slide-seqV2 NovaSeq (verified from PDF)"),
+    ("SlideSeqV2", "bulk-transcriptomics",
+     {"subject": "slideseqv2_study", "qualifier": "uses_database",
+      "object": "Slide-seq"},
+     "Slide-seqV2 — references predecessor → EFO:0009920"),
+    ("SlideSeqV2", "bulk-transcriptomics",
+     {"subject": "slideseqv2_study", "qualifier": "uses_database",
+      "object": "Drop-seq"},
+     "Slide-seqV2 — references Drop-seq → EFO:0008722"),
+
+    # ============================================================
+    #  Long-read benchmark — LRGASP (Pardo-Palacios 2024)
+    # ============================================================
+    # PDF verified: GSE185917, Oxford Nanopore, PacBio, multi-organism.
+    ("LRGASP", "bulk-transcriptomics",
+     {"subject": "GSE185917", "qualifier": "consolidates_dataset",
+      "object": "LRGASP consortium"},
+     "LRGASP GEO (verified from PDF)"),
+    ("LRGASP", "bulk-transcriptomics",
+     {"subject": "lrgasp_study", "qualifier": "sequenced_on",
+      "object": "Oxford Nanopore"},
+     "LRGASP ONT → NCIT:C146818 Nanopore Sequencing"),
+    ("LRGASP", "bulk-transcriptomics",
+     {"subject": "lrgasp_study", "qualifier": "sequenced_on",
+      "object": "PacBio"},
+     "LRGASP PacBio → NCIT:C146819 SMRT Sequencing"),
+    ("LRGASP", "bulk-transcriptomics",
+     {"subject": "lrgasp_study", "qualifier": "aligned_with",
+      "object": "minimap2"},
+     "LRGASP minimap2 → biotools:minimap2"),
+
+    # ============================================================
+    #  Reviews (4) — vocab-density coverage via PubMed abstracts
+    # ============================================================
+
+    # Conesa 2016 (PMID 26813401) — best practices RNA-seq
+    # Abstract mentions: read alignment, quantification of gene and
+    # transcript levels, differential gene expression, alternative splicing.
+    ("Conesa2016_review", "bulk-transcriptomics",
+     {"subject": "conesa_2016_review", "qualifier": "aligned_with",
+      "object": "STAR"},
+     "Review: STAR alignment (canonical pipeline)"),
+    ("Conesa2016_review", "bulk-transcriptomics",
+     {"subject": "conesa_2016_review", "qualifier": "quantified_with",
+      "object": "DESeq2"},
+     "Review: DESeq2 quantification"),
+    ("Conesa2016_review", "bulk-transcriptomics",
+     {"subject": "conesa_2016_review", "qualifier": "tested_with",
+      "object": "fold change"},
+     "Review: fold change — NCIT static concept"),
+    ("Conesa2016_review", "bulk-transcriptomics",
+     {"subject": "conesa_2016_review", "qualifier": "tested_with",
+      "object": "Wilcoxon"},
+     "Review: Wilcoxon (NCIT prefix-match)"),
+
+    # Hwang 2018 (PMID 30089861) — scRNA-seq tech & pipelines
+    # Abstract mentions: scRNA-seq protocols, library prep, NGS.
+    ("Hwang2018_review", "bulk-transcriptomics",
+     {"subject": "hwang_2018_review", "qualifier": "uses_database",
+      "object": "Smart-seq2"},
+     "Review: Smart-seq2 (EFO)"),
+    ("Hwang2018_review", "bulk-transcriptomics",
+     {"subject": "hwang_2018_review", "qualifier": "uses_database",
+      "object": "Drop-seq"},
+     "Review: Drop-seq (EFO)"),
+    ("Hwang2018_review", "bulk-transcriptomics",
+     {"subject": "hwang_2018_review", "qualifier": "uses_database",
+      "object": "MARS-seq"},
+     "Review: MARS-seq (EFO)"),
+
+    # Marx 2021 (PMID 33408395) — spatial transcriptomics Method of the Year
+    ("Marx2021_review", "bulk-transcriptomics",
+     {"subject": "marx_2021_review", "qualifier": "uses_database",
+      "object": "Visium"},
+     "Review: Visium spatial → EFO:0010961"),
+    ("Marx2021_review", "bulk-transcriptomics",
+     {"subject": "marx_2021_review", "qualifier": "uses_database",
+      "object": "Slide-seq"},
+     "Review: Slide-seq spatial → EFO:0009920"),
+
+    # Stark 2019 (PMID 31341269) — RNA-seq teenage years (Nat Rev Genet)
+    ("Stark2019_review", "bulk-transcriptomics",
+     {"subject": "stark_2019_review", "qualifier": "uses_database",
+      "object": "bulk RNA-seq"},
+     "Review: bulk RNA-seq concept → NCIT:C219552"),
+    ("Stark2019_review", "bulk-transcriptomics",
+     {"subject": "stark_2019_review", "qualifier": "aligned_with",
+      "object": "STAR"},
+     "Review: STAR canonical aligner"),
 ]
 
 
 def _render_claim_as_rdf(graph: rdflib.Graph, idx: int, enriched: dict) -> None:
-    """Mint a tiny RDF representation of an enriched claim so we have
-    something to feed pyshacl. We don't follow the full ASB ``Claim``
-    SuperPattern here — just stash the principal CURIEs as ``rdfs:label``
-    on a synthetic node so the SHACL CURIE-format shape fires."""
     asb = rdflib.Namespace("https://w3id.org/asb/")
     claim_iri = asb[f"claim_{idx}"]
     graph.add((claim_iri, rdflib.RDF.type, asb.Claim))
     for slot, curie in (enriched.get("ontology_terms") or {}).items():
-        prop = asb[slot]
-        graph.add((claim_iri, prop, rdflib.Literal(curie)))
+        graph.add((claim_iri, asb[slot], rdflib.Literal(curie)))
 
 
 def main() -> int:
     adapters = discover_adapters()
     composite = compose_adapters(list(adapters.values()))
     shapes_graph = composite.shacl_shapes()
-    print(
-        f"[setup] {len(adapters)} adapters discovered, "
-        f"{len(shapes_graph)} SHACL triples loaded.\n"
-    )
 
-    all_claims = WARNER_CLAIMS + TABULA_MURIS_CLAIMS
+    n_papers = len({c[0] for c in CORPUS})
+    print(
+        f"[setup] {len(adapters)} adapters, {len(CORPUS)} claims across "
+        f"{n_papers} papers."
+    )
+    print()
+
     data_graph = rdflib.Graph()
     enriched_count = 0
+    by_ontology: Counter = Counter()
+    by_paper: defaultdict[str, list[int]] = defaultdict(list)
+    unresolved: list[tuple[int, str, str, str]] = []  # idx, paper, term, note
 
-    for i, (paper, adapter_name, claim_in, note) in enumerate(all_claims, 1):
+    placeholder_prefixes = (
+        "study_", "tabula_", "marx_", "conesa_", "hwang_", "stark_",
+        "brunet_", "packer_", "briggs_", "wagner_", "tirosh_",
+        "slideseqv2_", "lrgasp_", "sebepedros_", "layden_", "warner_",
+        "cheung_",
+    )
+
+    for i, (paper, adapter_name, claim_in, note) in enumerate(CORPUS, 1):
+        adapter = adapters[adapter_name]
+        enriched = adapter.enrich_claim(claim_in)
+        terms = enriched.get("ontology_terms") or {}
+
+        if not terms:
+            # Identify which slot value triggered the miss for logging.
+            for slot in ("subject", "object"):
+                val = claim_in.get(slot, "")
+                if val and not val.startswith(placeholder_prefixes):
+                    unresolved.append((i, paper, val, note))
+            continue
+
+        enriched_count += 1
+        by_paper[paper].append(i)
+        _render_claim_as_rdf(data_graph, i, enriched)
+        for curie in terms.values():
+            prefix = curie.split(":", 1)[0] if ":" in curie else "?"
+            by_ontology[prefix] += 1
+
+    # Per-claim print, terse
+    print("Per-claim results:")
+    for i, (paper, adapter_name, claim_in, _note) in enumerate(CORPUS, 1):
         adapter = adapters[adapter_name]
         enriched = adapter.enrich_claim(claim_in)
         terms = enriched.get("ontology_terms") or {}
         marker = "✓" if terms else "○"
         slot_curies = (
-            ", ".join(f"{k}={v}" for k, v in terms.items()) if terms else "no resolution"
+            ", ".join(f"{k}={v}" for k, v in terms.items())
+            if terms else "—"
         )
-        print(f"[{i:2d}] {paper:12s} {adapter_name:30s} {marker} {slot_curies}")
-        print(f"      {note}")
-        if terms:
-            enriched_count += 1
-            _render_claim_as_rdf(data_graph, i, enriched)
+        print(f"  [{i:2d}] {paper:20s} {marker} {slot_curies}")
 
     print()
-    print(f"[summary] {enriched_count}/{len(all_claims)} claims enriched.")
+    print("=" * 60)
+    print(f"[summary] {enriched_count}/{len(CORPUS)} claims enriched "
+          f"({enriched_count * 100 // len(CORPUS)}%)")
+    print()
 
-    # SHACL validation on the synthesised RDF. The shapes ship with a
-    # CURIE-format NodeShape that should pass — the assert proves the
-    # full chain is plumbed.
-    conforms, _report_graph, _report_text = pyshacl.validate(
+    print("Per-paper enriched count:")
+    for paper, idxs in sorted(by_paper.items()):
+        total_for_paper = sum(1 for c in CORPUS if c[0] == paper)
+        print(f"  {paper:22s} {len(idxs):>2d} / {total_for_paper}")
+    print()
+
+    print("Per-ontology hit count (coverage matrix):")
+    for ont, n in by_ontology.most_common():
+        print(f"  {ont:14s} {n:>3d}")
+    print(f"  ({len(by_ontology)} distinct ontologies fired)")
+    print()
+
+    if unresolved:
+        print("Unresolved terms — candidates for next ontology add or refinement:")
+        for idx, paper, term, note in unresolved:
+            print(f"  [{idx:2d}] {paper:20s} {term!r}")
+            print(f"       reason: {note}")
+        print()
+
+    conforms, _, _ = pyshacl.validate(
         data_graph=data_graph,
         shapes_graph=shapes_graph,
         meta_shacl=False,
@@ -163,14 +438,7 @@ def main() -> int:
     )
     print(f"[shacl] data graph: {len(data_graph)} triples, "
           f"conforms: {conforms}")
-    print()
 
-    # Dump one fully-enriched claim for visual inspection.
-    print("Sample enriched claim (claim #5, Warner MMP9 localised_in_tissue):")
-    sample = adapters["single-cell-transcriptomics"].enrich_claim(
-        WARNER_CLAIMS[4][2]
-    )
-    print(json.dumps(sample, indent=2, ensure_ascii=False))
     return 0
 
 

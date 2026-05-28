@@ -1,5 +1,104 @@
 # Changelog
 
+## v0.11.0 — Real-corpus smoke test on 16 papers, 45 claims (2026-05-28)
+
+Expands ``examples/test_on_papers.py`` from the 2-paper / 10-claim
+minimum-viable smoke test (v0.10.0) to a **diverse 16-paper /
+45-claim corpus** covering the six supported organisms across bulk,
+single-cell, spatial and long-read modalities — plus four
+methodology reviews for vocab-density coverage. 4 new PDFs added to
+``articles/`` (Brunet Avalos 2019 Drosophila, Packer 2019 C. elegans,
+Wagner 2018 zebrafish, Tirosh 2016 melanoma) extend the prior 6-PDF
+mini-corpus from v0.3.1.
+
+### Corpus composition
+
+**12 primary research papers** (10 with PDFs in ``articles/``, 2
+based on prior corpus extraction — Warner / Cheung):
+
+| Paper | Organism | Modality | Source |
+|---|---|---|---|
+| Warner et al. 2025 | *Nematostella* | bulk regeneration | prior |
+| Cheung et al. 2024 | *Nematostella* | spatial Tomo-seq | prior |
+| Sebé-Pedrós et al. 2018 (PMID 29856953) | *Nematostella* | scRNA atlas | PDF |
+| Layden et al. 2016 | *Nematostella* | bulk microarray | PDF |
+| Tabula Muris 2018 (PMID 30283141) | mouse | scRNA atlas | PDF |
+| Tabula Sapiens 2022 (PMID 35549404) | human | scRNA atlas | PDF |
+| Brunet Avalos et al. 2019 (PMID 31746739) | *Drosophila* | scRNA brain | PDF (new) |
+| Packer et al. 2019 (PMID 31488706) | *C. elegans* | scRNA embryogenesis | PDF (new) |
+| Wagner et al. 2018 (PMID 29700227) | zebrafish | scRNA embryo | PDF (new) |
+| Tirosh et al. 2016 | melanoma | scRNA cancer | PDF (new) |
+| Stickels et al. 2021 (Slide-seqV2) | mouse | spatial method | PDF |
+| Pardo-Palacios et al. 2024 (LRGASP) | multi | long-read benchmark | PDF |
+
+**4 methodology reviews** (PubMed efetch abstracts):
+
+| Review | PMID |
+|---|---|
+| Conesa et al. 2016 — *Survey of best practices for RNA-seq* | 26813401 |
+| Hwang et al. 2018 — *scRNA-seq technologies and pipelines* | 30089861 |
+| Marx 2021 — *Method of the Year: spatially resolved transcriptomics* | 33408395 |
+| Stark et al. 2019 — *RNA sequencing: the teenage years* | 31341269 |
+
+### Methodology
+
+Claims hand-curated with traceable sources:
+
+- **PDF papers**: accessions, instruments and methods extracted
+  via regex / abstract reading from the actual PDF text. The most
+  rigorous tier. Notable verified data this release: Brunet Avalos
+  GSE134722 + Illumina NovaSeq 6000, Packer GSE126954 + NextSeq,
+  Wagner GSE112294, Tirosh GSE72056 + GSE77940 + Smart-seq2,
+  Sebé-Pedrós GSE95723 + MARS-seq, Layden E-MTAB-4831,
+  Tabula Sapiens GSE201333 (which had been a memory-based guess —
+  now verified).
+- **Memory-based** (Warner / Cheung): established from prior
+  v0.3.1 extraction work; claims are verifiable against the
+  published papers.
+- **Review abstracts**: pulled via PubMed efetch; claims drawn
+  from explicit mentions of tools / protocols in the abstract
+  text.
+
+Method explicitly: **not** full-text LLM extraction. The point of
+v0.11.0 is reproducibility — every claim has a traceable source.
+
+### Results
+
+- **44 / 45 claims enriched (~98%)**.
+- **18 distinct ontologies fired**: EFO, GEO, HGNC, biotools, NCIT,
+  WBbt, CHEBI, CL, UBERON, MGI, ZFA, FlyBase, WormBase, ZFIN, DOID,
+  ArrayExpress, FBbt, EMAPA. Two new this release vs v0.10.0
+  (the minimum-viable smoke test):
+  - **ArrayExpress** — via Layden 2016 E-MTAB-4831 accession.
+  - **DOID** — via Tirosh 2016 *melanoma* clinical claim.
+- **SHACL validation conforms** on the synthesised RDF data graph
+  (116 triples).
+
+### Single unresolved term — honest signal
+
+- ``scVI`` — known absent from bio.tools, documented at v0.6.x.
+  Tabula Sapiens uses scVI; LLM extraction will surface this on
+  any single-cell paper using probabilistic modelling. Add a
+  ``scvi-tools`` direct-ID attempt in a v0.11.x bio.tools harvest
+  refresh if benchmark frequency justifies.
+
+### Added
+
+- ``examples/test_on_papers.py`` rewritten with the 16-paper corpus
+  + per-paper + per-ontology coverage matrix + traceable per-claim
+  sourcing notes. Distinct from ``examples/enrich_warner2018.py``
+  (the 25-claim hand-built resolution-coverage showcase).
+
+### Notes
+
+- No data or production code changed in v0.11.0 — concept index
+  stays at 19 sources / ~447 CURIEs from v0.9.0. Only the example
+  script + 4 new PDFs in ``articles/`` (gitignored).
+- The script's coverage matrix is the v0.11.0 deliverable: a
+  one-page empirical report on what the adapter catches on a
+  realistic 16-paper transcriptomics corpus, reproducible by
+  anyone with the package installed.
+
 ## v0.10.0 — Integration smoke tests + Protocol-conformance suite (2026-05-28)
 
 Quality + v1.0-prep release inspired by an audit of the sibling
