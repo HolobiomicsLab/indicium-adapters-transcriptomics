@@ -117,13 +117,16 @@ class SingleCellTranscriptomicsAdapter:
         if "xrefs" in claim:
             claim["xrefs"] = dict(claim["xrefs"])
 
+        # v0.6.0: forward optional species hint to every resolver.
+        # Non-gene resolvers ignore it.
+        species_hint = claim.get("species")
         for slot in _ENRICHABLE_SLOTS:
             name = (claim.get(slot) or "").strip()
             if not name:
                 continue
             for resolver_name in _DEFAULT_PRIORITY:
                 resolver = _RESOLVERS[resolver_name]
-                result = resolver(name)
+                result = resolver(name, species=species_hint)
                 if result is None:
                     continue
                 curie, xrefs = result

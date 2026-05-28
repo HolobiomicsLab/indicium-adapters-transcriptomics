@@ -260,6 +260,85 @@ def test_enrich_claim_object_slot_also_resolved():
     assert out["ontology_terms"]["object"] == "HGNC:12783"
 
 
+# --- mouse (MGI) gene resolution (v0.6.0) -----------------------------------
+
+
+def test_mouse_symbol_resolves_to_mgi_via_casing_heuristic():
+    """v0.6.0: a Title-cased gene symbol (``Mapk1``) triggers the
+    casing heuristic — the gene resolver picks the mouse (MGI) row,
+    not the human (HGNC) row, even though both exist under the same
+    case-insensitive key in the index."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "Mapk1",
+        "qualifier": "differentially_expressed_in",
+        "object": "regenerating_tissue",
+    })
+    assert out["ontology_terms"]["subject"] == "MGI:1346858"
+    assert out["xrefs"]["subject"].get("mgi") == "MGI:1346858"
+
+
+def test_human_uppercase_symbol_still_resolves_to_hgnc():
+    """Mirror test: an UPPER-cased symbol picks human via the casing
+    heuristic. Verifies the heuristic is two-sided and that adding
+    mouse to the index didn't break human resolution for the same
+    symbol family."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MAPK1",
+        "qualifier": "differentially_expressed_in",
+        "object": "regenerating_tissue",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:6871"
+
+
+def test_species_hint_overrides_casing_heuristic():
+    """v0.6.0: an explicit ``species`` field on the claim overrides
+    the casing heuristic. A weirdly-cased symbol ``MAPK1`` with
+    ``species="mouse"`` resolves to the MGI row — useful when an LLM
+    extractor normalises casing but knows the paper is about mouse."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MAPK1",
+        "qualifier": "differentially_expressed_in",
+        "object": "regenerating_tissue",
+        "species": "mouse",
+    })
+    assert out["ontology_terms"]["subject"] == "MGI:1346858"
+
+
+def test_mgi_accession_resolves_directly():
+    """An MGI accession (``MGI:1346858``) in a claim slot resolves
+    via the gene resolver's accession-lookup path, bypassing the
+    symbol-disambiguation logic entirely. Useful for callers who
+    want unambiguous mouse-gene references."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MGI:1346858",
+        "qualifier": "differentially_expressed_in",
+        "object": "regenerating_tissue",
+    })
+    assert out["ontology_terms"]["subject"] == "MGI:1346858"
+    # MGI value is in the principal CURIE; symbol comes from the row.
+    assert out["xrefs"]["subject"].get("mgi") == "MGI:1346858"
+
+
+def test_mouse_only_symbol_resolves_without_collision():
+    """A mouse-specific gene with no human equivalent of the same
+    name (the gene ``Xist`` exists in both species but its mouse
+    capitalisation is ``Xist``; the human one is ``XIST`` so the
+    collision is benign). Pick something clearer: ``Foxp3``
+    (uppercase ``FOXP3`` is the human ortholog with HGNC; the
+    Title-cased ``Foxp3`` is the mouse Treg marker)."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "Foxp3",
+        "qualifier": "marker_of",
+        "object": "regulatory_T_cell",
+    })
+    assert out["ontology_terms"]["subject"].startswith("MGI:")
+
+
 # --- concept enrichment scaffolding (v0.3.0) --------------------------------
 
 

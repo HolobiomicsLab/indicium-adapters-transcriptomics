@@ -100,6 +100,25 @@ CLAIMS: Final[list[ClaimSpec]] = [
          "object": "Wilcoxon"},
         "Static concept (subject) + corpus stat (object, prefix match)",
     ),
+    # --- v0.6.0: mouse (MGI) via Tabula Muris-style claim -------------------
+    (
+        "singlecell",
+        {"subject": "Foxp3", "qualifier": "marker_of_cell_type",
+         "object": "regulatory T cell"},
+        "v0.6.0 mouse: Title-cased Foxp3 → MGI via casing heuristic + Treg → CL",
+    ),
+    (
+        "bulk",
+        {"subject": "Mapk1", "qualifier": "differentially_expressed_in",
+         "object": "intestine"},
+        "v0.6.0 mouse via heuristic: Mapk1 → MGI (NOT MAPK1 → HGNC)",
+    ),
+    (
+        "bulk",
+        {"subject": "MAPK1", "qualifier": "differentially_expressed_in",
+         "object": "intestine", "species": "mouse"},
+        "v0.6.0 species hint: explicit override even when symbol is UPPERCASE",
+    ),
     # --- Single-cell: anatomy + new gene resolver (v0.4.0) -----------------
     (
         "singlecell",

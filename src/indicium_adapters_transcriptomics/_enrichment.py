@@ -25,13 +25,22 @@ from typing import Final
 _GENE_INDEX_COLUMNS: Final[tuple[str, ...]] = (
     "symbol",
     "hgnc",
+    "mgi",
     "ensembl",
     "ncbigene",
     "nemve1",
     "nvertx",
     "uniprot",
+    "species",
     "description",
 )
+
+
+# Recognised species tags (column ``species``). The order encodes the
+# fallback priority used by ``GeneIndex.lookup`` when neither an
+# explicit hint nor the casing heuristic can disambiguate a collision.
+# Human first because it dominates transcriptomics-paper claims.
+_KNOWN_SPECIES: Final[tuple[str, ...]] = ("human", "mouse", "nematostella")
 
 
 def _load_gene_index_rows() -> list[dict[str, str]]:
@@ -47,44 +56,172 @@ def _load_gene_index_rows() -> list[dict[str, str]]:
         return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
 
 
-class GeneIndex:
-    """Case-insensitive gene-symbol lookup with a few aliasing strategies.
+def _infer_species_from_casing(token: str) -> str | None:
+    """Casing heuristic used when no explicit species hint is given.
 
-    Pure data; loaded once at import time. The class only exposes a single
-    ``lookup()`` method so adapters can stay decoupled from the on-disk
-    format and the alias logic.
+    Convention in the field:
+
+    * **Human (HGNC)** symbols are written ALL UPPERCASE: ``MAPK1``,
+      ``WNT4``, ``CD3E``.
+    * **Mouse (MGI)** symbols are written Title-cased — first letter
+      upper, the rest as in HGNC but lower: ``Mapk1``, ``Wnt4``,
+      ``Cd3e``.
+    * **Nematostella** (Nemve1) ids are written all-lowercase with a
+      dotted gene-model id (``gw.51.96.1``), so they never come
+      through this path.
+
+    Returns ``"human"`` / ``"mouse"`` / ``None`` (ambiguous — e.g.
+    all-lowercase or mixed case that doesn't match the convention).
+    The caller falls back to the species-hint or load-order rules.
+    """
+    if not token or not token[0].isalpha():
+        return None
+    if token.isupper():
+        return "human"
+    if token[0].isupper() and not token.isupper():
+        # Title-cased: first letter upper, rest contains lowercase.
+        # Reject if a hyphen / dot / space follows a lowercase prefix
+        # (Nemve1-style ids, accessions, etc.).
+        return "mouse"
+    return None
+
+
+class GeneIndex:
+    """Case-insensitive gene-symbol lookup with v0.6.0 species disambiguation.
+
+    For each symbol we store the *list* of rows that share the
+    lower-cased key — typically a single human row, but ``MAPK1`` /
+    ``Mapk1`` resolve to the same key and so produce a 2-row list
+    (one human, one mouse). ``lookup`` then picks among them using:
+
+    1. An explicit ``species`` parameter from the caller (the
+      "hint" path — see ``BulkTranscriptomicsAdapter.enrich_claim``
+       passing ``claim.get("species")``).
+    2. A casing heuristic (UPPER → human, Title-case → mouse) —
+       safe because the conventions are universal in the field.
+    3. Load order, which puts human first
+       (see ``_KNOWN_SPECIES``) so collisions resolve to human by
+       default when neither the hint nor the casing can disambiguate.
+
+    Accession-style lookups (Nemve1, UniProt, MGI id) are still
+    single-row dicts — accessions are unambiguous by construction.
     """
 
     def __init__(self, rows: list[dict[str, str]]):
         self._rows = rows
-        self._by_symbol: dict[str, dict[str, str]] = {
-            row["symbol"].lower(): row for row in rows if row["symbol"]
-        }
+        self._by_symbol: dict[str, list[dict[str, str]]] = {}
+        for row in rows:
+            symbol = row.get("symbol")
+            if symbol:
+                self._by_symbol.setdefault(symbol.lower(), []).append(row)
         self._by_nemve1: dict[str, dict[str, str]] = {
-            row["nemve1"]: row for row in rows if row["nemve1"]
+            row["nemve1"]: row for row in rows if row.get("nemve1")
         }
         self._by_uniprot: dict[str, dict[str, str]] = {
-            row["uniprot"]: row for row in rows if row["uniprot"]
+            row["uniprot"]: row for row in rows if row.get("uniprot")
+        }
+        # MGI accession lookup — added in v0.6.0. CURIE form ``MGI:NNN``.
+        self._by_mgi: dict[str, dict[str, str]] = {
+            row["mgi"]: row for row in rows if row.get("mgi")
         }
 
-    def lookup(self, name: str) -> dict[str, str] | None:
+    def lookup(
+        self, name: str, *, species: str | None = None
+    ) -> dict[str, str] | None:
         """Return the matching row as a dict, or ``None``.
 
-        Tries (in order): gene symbol (case-insensitive) → Nemve1 / JGI id
-        (case-sensitive) → UniProt accession (case-sensitive).
+        ``species`` is an optional hint: ``"human"`` / ``"mouse"`` /
+        ``"nematostella"``. When given, it disambiguates symbol-level
+        collisions (``MAPK1`` ↔ ``Mapk1``). When not given, a casing
+        heuristic infers it; if still ambiguous, falls back to the
+        load order (human first).
+
+        Lookup order: gene symbol (case-insensitive, with species
+        disambiguation) → Nemve1 / JGI id → UniProt accession →
+        MGI accession. The accession paths are single-row hits and
+        bypass the disambiguation logic.
         """
         if not isinstance(name, str):
             return None
         token = name.strip()
         if not token:
             return None
-        if row := self._by_symbol.get(token.lower()):
-            return row
+
+        # Symbol path — may return multi-row lists; disambiguate.
+        candidates = self._by_symbol.get(token.lower(), [])
+        if candidates:
+            return self._pick_candidate(candidates, token, species)
+
+        # Accession paths — exact, single-row, case-sensitive.
         if row := self._by_nemve1.get(token):
             return row
         if row := self._by_uniprot.get(token):
             return row
+        if row := self._by_mgi.get(token):
+            return row
         return None
+
+    @staticmethod
+    def _pick_for_species(
+        candidates: list[dict[str, str]], wanted: str
+    ) -> dict[str, str] | None:
+        """Return the first candidate that serves the wanted species.
+
+        A row "serves" species ``X`` when either its ``species`` tag is
+        ``X``, or it carries the canonical CURIE column for ``X``
+        (HGNC for human, MGI for mouse, Nemve1 for nematostella).
+        The latter catches Nematostella-anchored rows that ship a
+        human ortholog under ``hgnc`` — a lookup of ``MMP9`` should
+        return such a row when the human species is wanted, even
+        though the row's primary tag is ``nematostella``."""
+        canonical_col = {
+            "human": "hgnc",
+            "mouse": "mgi",
+            "nematostella": "nemve1",
+        }.get(wanted)
+        # First pass: prefer an exact species-tag match (rows whose
+        # primary species is the wanted one).
+        for row in candidates:
+            if row.get("species") == wanted:
+                return row
+        # Second pass: any row that carries the wanted species' canonical
+        # CURIE column — covers cross-listed rows (Nematostella anchor
+        # + human ortholog under hgnc).
+        if canonical_col:
+            for row in candidates:
+                if row.get(canonical_col):
+                    return row
+        return None
+
+    @staticmethod
+    def _pick_candidate(
+        candidates: list[dict[str, str]],
+        token: str,
+        species: str | None,
+    ) -> dict[str, str]:
+        """Apply the v0.6.0 disambiguation rules to a symbol-collision list."""
+        if len(candidates) == 1:
+            return candidates[0]
+        # Rule 1: explicit hint wins (with cross-listed fallback).
+        if species:
+            row = GeneIndex._pick_for_species(candidates, species)
+            if row is not None:
+                return row
+            # Hint didn't match anything — fall through to heuristic.
+        # Rule 2: casing heuristic (human / mouse / None).
+        heuristic = _infer_species_from_casing(token)
+        if heuristic:
+            row = GeneIndex._pick_for_species(candidates, heuristic)
+            if row is not None:
+                return row
+        # Rule 3: load order — first known-species row wins.
+        for sp in _KNOWN_SPECIES:
+            row = GeneIndex._pick_for_species(candidates, sp)
+            if row is not None:
+                return row
+        # Last resort: first candidate (defensive — shouldn't happen
+        # with current build, all rows carry one of _KNOWN_SPECIES).
+        return candidates[0]
 
     def __len__(self) -> int:
         return len(self._rows)
@@ -256,27 +393,36 @@ CONCEPT_INDEX: Final[ConceptIndex] = ConceptIndex(_load_concept_index_rows())
 # row → claim-shape rendering logic.
 
 # Order in which gene-row columns are tried for the principal CURIE.
-# HGNC values are stored already in CURIE form; the others are bare ids
-# (`ENSG…`, `54361`, …) and get prefixed here.
+# HGNC and MGI values are stored already in CURIE form; Ensembl / NCBI
+# Gene are bare ids and get prefixed here. The order matters for
+# multi-id rows: a Nematostella row paired with a human ortholog has
+# both ``hgnc`` and ``nemve1`` set — HGNC wins, which is the
+# documented v0.1.2 contract. Mouse rows have ``mgi`` set and ``hgnc``
+# empty so MGI naturally wins for them.
 _GENE_PRINCIPAL_CURIE_PREFIX: Final[tuple[tuple[str, str | None], ...]] = (
     ("hgnc", None),
+    ("mgi", None),
     ("ensembl", "ENSEMBL"),
     ("ncbigene", "NCBIGene"),
 )
 
 # Xref columns surfaced under ``xrefs[slot]``. Bare ids (no prefixing).
 _GENE_XREF_COLUMNS: Final[tuple[str, ...]] = (
-    "hgnc", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
+    "hgnc", "mgi", "ensembl", "ncbigene", "nemve1", "nvertx", "uniprot",
 )
 
 
-def resolve_gene(name: str) -> tuple[str, dict[str, str]] | None:
+def resolve_gene(
+    name: str, *, species: str | None = None
+) -> tuple[str, dict[str, str]] | None:
     """Resolve ``name`` to a gene CURIE + xrefs via ``GENE_INDEX``.
 
-    Principal CURIE follows HGNC > Ensembl > NCBIGene priority; xrefs
-    surface the bare HGNC / Ensembl / NCBIGene / Nemve1 / NvERTx /
+    ``species`` is forwarded to ``GENE_INDEX.lookup`` and disambiguates
+    symbol-level collisions (``MAPK1`` ↔ ``Mapk1``). Principal CURIE
+    follows HGNC > MGI > Ensembl > NCBIGene priority; xrefs surface
+    the bare HGNC / MGI / Ensembl / NCBIGene / Nemve1 / NvERTx /
     UniProt ids so downstream consumers can render any of them."""
-    row = GENE_INDEX.lookup(name)
+    row = GENE_INDEX.lookup(name, species=species)
     if row is None:
         return None
     curie: str | None = None
@@ -291,8 +437,16 @@ def resolve_gene(name: str) -> tuple[str, dict[str, str]] | None:
     return curie, xrefs
 
 
-def resolve_anatomy(name: str) -> tuple[str, dict[str, str]] | None:
-    """Resolve ``name`` to a UBERON anatomy CURIE + xrefs via ``ANATOMY_INDEX``."""
+def resolve_anatomy(
+    name: str, *, species: str | None = None
+) -> tuple[str, dict[str, str]] | None:
+    """Resolve ``name`` to a UBERON anatomy CURIE + xrefs via ``ANATOMY_INDEX``.
+
+    ``species`` is accepted for resolver-signature uniformity (the
+    bulk/single-cell dispatchers pass it to every resolver) but
+    anatomy entries are not species-specific in the current bundle —
+    UBERON is a multi-species ontology — so the hint is ignored."""
+    del species  # uniform signature; not used here
     row = ANATOMY_INDEX.lookup(name)
     if row is None:
         return None
@@ -302,8 +456,15 @@ def resolve_anatomy(name: str) -> tuple[str, dict[str, str]] | None:
     return row["uberon"], xref
 
 
-def resolve_concept(name: str) -> tuple[str, dict[str, str]] | None:
-    """Resolve ``name`` to a concept CURIE + xrefs via ``CONCEPT_INDEX``."""
+def resolve_concept(
+    name: str, *, species: str | None = None
+) -> tuple[str, dict[str, str]] | None:
+    """Resolve ``name`` to a concept CURIE + xrefs via ``CONCEPT_INDEX``.
+
+    ``species`` is accepted for resolver-signature uniformity; concept
+    entries (methodology / protocols / cell types) are not
+    species-specific so the hint is ignored."""
+    del species  # uniform signature; not used here
     row = CONCEPT_INDEX.lookup(name)
     if row is None:
         return None

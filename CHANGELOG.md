@@ -1,5 +1,87 @@
 # Changelog
 
+## v0.6.0 — Mouse (MGI) gene index + species-aware lookup (2026-05-28)
+
+### Added — MGI mouse gene catalogue
+
+- `data/build_gene_index.py` extended to fetch the **MGI marker list**
+  (MRK_List2.rpt, ~78 MB). Filters to ``Marker Type == "Gene"`` to
+  exclude BAC/YAC ends and syntenic markers. **75,250 mouse rows**
+  added to the bundled index — every protein-coding (and most
+  non-coding) mouse marker known to MGI.
+- Mouse rows carry `species=mouse` and an `mgi=MGI:NNN` accession;
+  ensembl / ncbigene / uniprot cross-refs are left empty in v0.6.0
+  (those live in separate MGI report files — integrating them is on
+  the v0.6.1 roadmap).
+- Bundled `gene_index.tsv` grows from ~53k to **128,353 rows**:
+  14,150 Nematostella-anchored + 38,953 pure-HGNC human + 75,250 MGI
+  mouse.
+
+### Added — species-aware lookup (B + C disambiguation)
+
+- New schema columns ``mgi`` and ``species`` (``human`` / ``mouse`` /
+  ``nematostella``). The species tag drives the v0.6.0 lookup rules.
+- New optional `species` field on the claim dict (``"human"`` /
+  ``"mouse"`` / ``"nematostella"``). The dispatcher forwards it to
+  every resolver; the gene resolver uses it to disambiguate
+  symbol-level collisions (``MAPK1`` ↔ ``Mapk1`` both lower-case
+  to ``mapk1``).
+- **Casing heuristic** for claims with no species hint:
+  ``MAPK1`` (all uppercase) → human (HGNC); ``Mapk1`` (Title case)
+  → mouse (MGI). This is the universal naming convention in the
+  field and works without any LLM-side change.
+- **Fallback priority** when neither hint nor heuristic disambiguates:
+  human > mouse > nematostella (load order, encoded in
+  ``_KNOWN_SPECIES``). Most transcriptomics claims are human-centric.
+- **Cross-listed rows.** A Nematostella-anchored row that carries a
+  human HGNC ortholog under ``hgnc`` is treated as "serving human"
+  too. So ``MMP9`` (all-uppercase → heuristic says human) resolves
+  to ``HGNC:7176`` via the Nematostella row's ortholog field, not
+  to the mouse ``Mmp9`` row. Rule lives in
+  ``GeneIndex._pick_for_species``.
+- MGI accessions (``MGI:1346858``) in claim slots resolve directly
+  via the new ``_by_mgi`` index — bypassing the symbol-collision
+  logic entirely.
+
+### Added — runtime + resolver-signature uniformity
+
+- Principal CURIE priority extended: HGNC > **MGI** > Ensembl >
+  NCBIGene. Mouse rows with empty ``hgnc`` naturally surface
+  ``MGI:NNN`` as principal; Nematostella rows with a human ortholog
+  still surface HGNC first.
+- ``xrefs[slot]`` now also surfaces the ``mgi`` column for any row
+  that carries it.
+- All three resolvers (accession / gene / concept / anatomy) now
+  share a uniform signature ``(name, *, species=None)`` so the
+  dispatcher can forward the hint without branching. Non-gene
+  resolvers explicitly ignore the hint (anatomy and concept entries
+  are not species-specific in the current bundles).
+
+### Added — tests
+
+- 5 new tests in ``test_bulk.py``:
+  - mouse via Title-case heuristic (``Mapk1`` → MGI:1346858)
+  - human via UPPER-case heuristic (``MAPK1`` → HGNC:6871)
+  - species hint overrides heuristic (``MAPK1``+``species=mouse``
+    → MGI:1346858)
+  - MGI accession resolves directly (``MGI:1346858`` → MGI:1346858)
+  - mouse-only convenience pin (``Foxp3`` → MGI:1891436)
+
+### Updated — demo
+
+- ``examples/enrich_warner2018.py`` gains 3 v0.6.0 claims: Foxp3 →
+  MGI + Treg → CL (cross-mechanism), Mapk1 → MGI via heuristic,
+  MAPK1+species=mouse → MGI override. 15/15 claims enrich.
+
+### Notes
+
+- v0.6.1 follow-up — wire MGI Ensembl / MGI EntrezGene /
+  MGI SwissProt cross-ref files into ``build_gene_index.py`` so
+  mouse rows ship full xref maps (currently only ``mgi`` is
+  populated).
+- v0.6.2 follow-up — zebrafish (ZFIN), C. elegans (WormBase),
+  Drosophila (FlyBase) following the same multi-species pattern.
+
 ## v0.5.0 — Cell Ontology enrichment + OLS4 cascade refinements (2026-05-28)
 
 ### Added — Cell Ontology (CL) harvest

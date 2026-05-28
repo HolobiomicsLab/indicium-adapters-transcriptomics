@@ -2,17 +2,20 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.5.0 ships two sibling adapters:
+v0.6.0 ships two sibling adapters:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
   accessions (GEO / SRA / ENA / ArrayExpress / ENCODE / BioProject / dbGaP /
-  BioStudies) and gene names from a bundled comprehensive index (~53,000
-  entries) covering the full HGNC human gene catalogue cross-referenced
-  with the *Nematostella vectensis* G2V2 mapping (JGI Nemve1 + NvERTx + NVE
-  + Nv2g + UniProt). The lookup accepts a gene symbol, a Nemve1 / JGI id,
-  or a UniProt accession; HGNC orthology is attached to Nematostella rows
-  whenever the UniProt or `Preferred_name → HGNC symbol` join succeeds.
+  BioStudies) and gene names from a bundled comprehensive index
+  (**~128,000 entries** as of v0.6.0): the full HGNC human catalogue
+  cross-referenced with the *Nematostella vectensis* G2V2 mapping (JGI
+  Nemve1 + NvERTx + NVE + Nv2g + UniProt), plus the full MGI mouse
+  marker catalogue (75k mouse genes). Symbol-level collisions
+  (``MAPK1`` ↔ ``Mapk1``) are disambiguated by an optional ``species``
+  hint on the claim or a casing heuristic (UPPER → human,
+  Title-case → mouse). MGI / Nemve1 / UniProt accessions resolve
+  directly.
 - **`SingleCellTranscriptomicsAdapter`** — cell-resolution claims (cell-type
   markers, cluster enrichment, spatial localisation). Ships a small bundled
   UBERON anatomy index for the spatial-localisation qualifiers

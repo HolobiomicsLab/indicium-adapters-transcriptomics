@@ -1,27 +1,31 @@
 """Maintainer script — regenerate the bundled ``gene_index.tsv``.
 
-Joins two authoritative sources:
+Joins three authoritative sources:
 
-* The **G2V2 cross-reference table** (Nematostella vectensis): a curated
-  alignment of the five Nematostella naming systems (Nv2g, Nv2t, JGI, NvERTx,
-  NVE) with UniProt-derived orthology and GO / KEGG annotations.
-* The **HGNC complete set** (HUGO Gene Nomenclature Committee, human): the
-  authoritative catalogue of human gene symbols with cross-references to
-  Ensembl, NCBI Gene, UniProt, etc.
+* The **G2V2 cross-reference table** (Nematostella vectensis).
+* The **HGNC complete set** (HUGO Gene Nomenclature Committee, human).
+* The **MGI marker list** (Mouse Genome Informatics, MRK_List2.rpt) —
+  added in v0.6.0 to give Tabula Muris-style mouse claims a path to
+  resolution.
 
-The join uses UniProt accession as bridge: for each G2V2 row that carries a
-UniProt accession, look up the corresponding human ortholog in HGNC. The
-output ``gene_index.tsv`` keeps the schema declared by ``_enrichment.py``:
+Output schema (v0.6.0)::
 
-    symbol  hgnc  ensembl  ncbigene  nemve1  nvertx  uniprot  description
+    symbol  hgnc  mgi  ensembl  ncbigene  nemve1  nvertx  uniprot  species  description
+
+The ``species`` column (``human`` / ``mouse`` / ``nematostella``)
+drives the v0.6.0 species-aware lookup: callers may pass a species
+hint on the claim, and a casing heuristic infers species from the
+term itself (UPPER → human, Title-case → mouse) when no hint is
+given. Disambiguation rule lives in ``GeneIndex.lookup``.
 
 Usage (maintainer-only — not run at install or import time)::
 
     python -m indicium_adapters_transcriptomics.data.build_gene_index \\
-        --g2v2-xlsx /path/to/G2V2_2024_NvERTx.4_JGI_ENSEMBL_NVE.xlsx \\
-        [--hgnc-tsv /path/to/hgnc_complete_set.txt]   # else downloaded
+        --g2v2-xlsx /path/to/G2V2_*.xlsx \\
+        [--hgnc-tsv /path/to/hgnc_complete_set.txt] \\
+        [--mgi-tsv /path/to/MRK_List2.rpt]
 
-Re-run whenever G2V2 or HGNC release a new version.
+Re-run whenever G2V2, HGNC or MGI release a new version.
 """
 from __future__ import annotations
 
@@ -42,9 +46,11 @@ HGNC_URL_FALLBACK = (
 )
 
 OUT_COLUMNS = (
-    "symbol", "hgnc", "ensembl", "ncbigene",
-    "nemve1", "nvertx", "uniprot", "description",
+    "symbol", "hgnc", "mgi", "ensembl", "ncbigene",
+    "nemve1", "nvertx", "uniprot", "species", "description",
 )
+
+MGI_URL = "https://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
 
 
 def _first_token(value: object, separators: str = ",|;") -> str:
@@ -83,6 +89,64 @@ def _download_hgnc(target: Path) -> None:
         "Could not download HGNC complete set from either mirror; "
         "pass --hgnc-tsv with a local copy."
     )
+
+
+def _download_mgi(target: Path) -> None:
+    """Download the MGI marker list (MRK_List2.rpt)."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[mgi] downloading {MGI_URL} ...", file=sys.stderr)
+    r = requests.get(MGI_URL, stream=True, timeout=180)
+    r.raise_for_status()
+    with target.open("wb") as fh:
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                fh.write(chunk)
+    print(f"[mgi] wrote {target} ({target.stat().st_size:,} bytes)", file=sys.stderr)
+
+
+def _load_mgi(path: Path) -> list[dict[str, str]]:
+    """Parse MGI MRK_List2.rpt and return mouse-gene rows.
+
+    Filters to ``Marker Type == "Gene"`` to drop BAC/YAC ends, syntenic
+    markers, RIKEN cDNAs without a stable gene status, etc. Returned
+    rows carry the minimum fields needed by the bundled TSV
+    (``symbol``, ``mgi``, ``name``); ``ensembl`` / ``ncbigene`` /
+    ``uniprot`` cross-refs are left empty in v0.6.0 — they live in
+    different MGI report files (MRK_ENSEMBL / MGI_EntrezGene /
+    MRK_SwissProt) and integrating those is on the v0.6.1 roadmap.
+    """
+    df = pd.read_csv(
+        path,
+        sep="\t",
+        dtype=str,
+        low_memory=False,
+        na_filter=False,
+        on_bad_lines="warn",
+    )
+    needed = {"MGI Accession ID", "Marker Symbol", "Marker Type", "Marker Name"}
+    missing = needed - set(df.columns)
+    if missing:
+        raise RuntimeError(
+            f"MGI rpt is missing expected columns: {sorted(missing)}. "
+            f"Got: {sorted(df.columns)[:20]}..."
+        )
+    df = df[df["Marker Type"].str.strip() == "Gene"]
+    rows: list[dict[str, str]] = []
+    for _, r in df.iterrows():
+        symbol = (r["Marker Symbol"] or "").strip()
+        mgi_id = (r["MGI Accession ID"] or "").strip()
+        if not symbol or not mgi_id:
+            continue
+        rows.append({
+            "symbol": symbol,
+            "mgi": mgi_id,
+            "name": (r["Marker Name"] or "").strip(),
+        })
+    print(
+        f"[mgi] indexed {len(rows):,} mouse Gene rows (filtered from {len(df):,} total)",
+        file=sys.stderr,
+    )
+    return rows
 
 
 def _load_hgnc(
@@ -140,18 +204,20 @@ def _load_hgnc(
     return by_uniprot, by_symbol, all_rows
 
 
-def build(g2v2_path: Path, hgnc_path: Path, out_path: Path) -> int:
-    """Read G2V2 + HGNC, join, emit the bundled TSV. Return row count.
+def build(
+    g2v2_path: Path, hgnc_path: Path, mgi_path: Path, out_path: Path
+) -> int:
+    """Read G2V2 + HGNC + MGI, join, emit the bundled TSV. Return row count.
 
-    Output composition:
+    Output composition (in this load order — affects ``GeneIndex.lookup``
+    fallback ordering):
 
-    1. One row per de-duplicated G2V2 Nematostella gene, with HGNC orthology
-       attached when (a) the G2V2 UniProt matches a UniProt in HGNC, or
-       (b) the G2V2 Preferred_name matches an HGNC symbol case-insensitively.
-    2. One row per HGNC gene that was *not* already paired with a Nematostella
-       gene in step 1 — keeps full human-gene coverage so that any plain
-       human-only mention (e.g. an MMP in a cnidarian-vs-mammal comparison)
-       still resolves to its HGNC CURIE.
+    1. One row per de-duplicated G2V2 Nematostella gene
+       (``species=nematostella``).
+    2. One row per HGNC gene not already paired with a Nematostella row
+       (``species=human``).
+    3. One row per MGI mouse marker of type ``Gene``
+       (``species=mouse``).
     """
     print(f"[g2v2] reading {g2v2_path} ...", file=sys.stderr)
     g2v2 = pd.read_excel(g2v2_path, dtype=str, na_filter=False)
@@ -198,11 +264,13 @@ def build(g2v2_path: Path, hgnc_path: Path, out_path: Path) -> int:
             w.writerow({
                 "symbol": symbol,
                 "hgnc": (hgnc_row or {}).get("hgnc", ""),
+                "mgi": "",
                 "ensembl": (hgnc_row or {}).get("ensembl", ""),
                 "ncbigene": (hgnc_row or {}).get("ncbigene", ""),
                 "nemve1": jgi,
                 "nvertx": nvertx,
                 "uniprot": uniprot,
+                "species": "nematostella",
                 "description": description,
             })
             n_nem_total += 1
@@ -215,23 +283,44 @@ def build(g2v2_path: Path, hgnc_path: Path, out_path: Path) -> int:
             w.writerow({
                 "symbol": row["symbol"],
                 "hgnc": row["hgnc"],
+                "mgi": "",
                 "ensembl": row["ensembl"],
                 "ncbigene": row["ncbigene"],
                 "nemve1": "",
                 "nvertx": "",
                 "uniprot": row["uniprot"],
+                "species": "human",
                 "description": row["name"],
             })
             n_pure_hgnc += 1
 
-    n_total = n_nem_total + n_pure_hgnc
+        # Step 3 — MGI mouse rows (v0.6.0).
+        mgi_rows = _load_mgi(mgi_path)
+        n_mgi = 0
+        for row in mgi_rows:
+            w.writerow({
+                "symbol": row["symbol"],
+                "hgnc": "",
+                "mgi": row["mgi"],
+                "ensembl": "",
+                "ncbigene": "",
+                "nemve1": "",
+                "nvertx": "",
+                "uniprot": "",
+                "species": "mouse",
+                "description": row["name"],
+            })
+            n_mgi += 1
+
+    n_total = n_nem_total + n_pure_hgnc + n_mgi
     print(
         f"[out] wrote {out_path}: {n_total:,} rows total\n"
         f"       Nematostella-anchored : {n_nem_total:,}\n"
         f"         via UniProt join    : {n_via_uniprot:,}\n"
         f"         via symbol fallback : {n_via_symbol:,}\n"
         f"         Nematostella-only   : {n_nem_total - n_via_uniprot - n_via_symbol:,}\n"
-        f"       Pure-HGNC (no Nemve1) : {n_pure_hgnc:,}",
+        f"       Pure-HGNC (no Nemve1) : {n_pure_hgnc:,}\n"
+        f"       MGI (mouse)           : {n_mgi:,}",
         file=sys.stderr,
     )
     return n_total
@@ -252,15 +341,22 @@ def main(argv: list[str] | None = None) -> int:
         default=Path(__file__).parent / "gene_index.tsv",
         help="Output gene_index.tsv path (default: bundled location).",
     )
-    default_cache = (
-        Path.home()
-        / ".cache"
-        / "indicium-adapters-transcriptomics"
-        / "hgnc_complete_set.txt"
+    cache_dir = (
+        Path.home() / ".cache" / "indicium-adapters-transcriptomics"
     )
     parser.add_argument(
-        "--hgnc-cache", type=Path, default=default_cache,
+        "--hgnc-cache", type=Path,
+        default=cache_dir / "hgnc_complete_set.txt",
         help="Where to cache the downloaded HGNC TSV.",
+    )
+    parser.add_argument(
+        "--mgi-tsv", type=Path, default=None,
+        help="Local MGI MRK_List2.rpt. If omitted, downloaded to a cache.",
+    )
+    parser.add_argument(
+        "--mgi-cache", type=Path,
+        default=cache_dir / "MRK_List2.rpt",
+        help="Where to cache the downloaded MGI report.",
     )
     args = parser.parse_args(argv)
     hgnc_path = args.hgnc_tsv
@@ -268,7 +364,12 @@ def main(argv: list[str] | None = None) -> int:
         if not args.hgnc_cache.is_file():
             _download_hgnc(args.hgnc_cache)
         hgnc_path = args.hgnc_cache
-    build(args.g2v2_xlsx, hgnc_path, args.out)
+    mgi_path = args.mgi_tsv
+    if mgi_path is None:
+        if not args.mgi_cache.is_file():
+            _download_mgi(args.mgi_cache)
+        mgi_path = args.mgi_cache
+    build(args.g2v2_xlsx, hgnc_path, mgi_path, args.out)
     return 0
 
 

@@ -39,14 +39,22 @@ _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 # claims don't carry repository accessions in the same way).
 
 
-def _resolve_accession(name: str) -> tuple[str, dict[str, str]] | None:
+def _resolve_accession(
+    name: str, *, species: str | None = None
+) -> tuple[str, dict[str, str]] | None:
+    """Repository-accession resolver. Uniform signature with the
+    gene / concept resolvers; ``species`` is ignored — repository
+    accessions are species-agnostic."""
+    del species  # uniform signature
     curie = accession_to_curie(name)
     if curie is None:
         return None
     return curie, {}
 
 
-_RESOLVERS: Final[dict[str, Callable[[str], tuple[str, dict[str, str]] | None]]] = {
+_Resolver = Callable[..., tuple[str, dict[str, str]] | None]
+
+_RESOLVERS: Final[dict[str, _Resolver]] = {
     "accession": _resolve_accession,
     "gene":      resolve_gene,
     "concept":   resolve_concept,
@@ -177,6 +185,12 @@ class BulkTranscriptomicsAdapter:
 
         qualifier = (claim.get("qualifier") or "").strip()
         priority = _QUALIFIER_PRIORITY.get(qualifier, _DEFAULT_PRIORITY)
+        # v0.6.0: forward the optional species hint to every resolver
+        # (non-gene resolvers ignore it). When the claim has no hint,
+        # the gene resolver falls back to the casing heuristic
+        # (UPPER → human, Title-case → mouse) before defaulting to
+        # human via load order.
+        species_hint = claim.get("species")
 
         for slot in _ENRICHABLE_SLOTS:
             name = (claim.get(slot) or "").strip()
@@ -184,7 +198,7 @@ class BulkTranscriptomicsAdapter:
                 continue
             for resolver_name in priority:
                 resolver = _RESOLVERS[resolver_name]
-                result = resolver(name)
+                result = resolver(name, species=species_hint)
                 if result is None:
                     continue
                 curie, xrefs = result

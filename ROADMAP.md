@@ -98,6 +98,31 @@ new benchmark papers reveal the need.
   corpus (v0.3.1) → bio.tools (v0.3.1). Collision rule: first match
   wins, encoding a "grounding priority" ladder.
 
+### v0.6.0 — Mouse (MGI) + species-aware lookup (done)
+- ``build_gene_index.py`` fetches the MGI marker list (MRK_List2.rpt)
+  in parallel with HGNC + G2V2. Filters to ``Marker Type == "Gene"``.
+  75k mouse rows added; bundled index grows from 53k → 128k.
+- ``gene_index.tsv`` schema gains ``mgi`` and ``species`` columns.
+- ``GeneIndex.lookup`` disambiguates ``MAPK1`` ↔ ``Mapk1`` collisions
+  via (1) explicit ``species`` hint on the claim, (2) casing
+  heuristic, (3) load-order fallback. Cross-listed rows
+  (Nematostella + human HGNC ortholog) serve human lookups too.
+- Principal CURIE priority: HGNC > MGI > Ensembl > NCBIGene.
+
+### v0.6.1 — Mouse cross-refs
+- Extend ``build_gene_index.py`` to also fetch and join MGI's
+  ``MRK_ENSEMBL.rpt`` (mouse Ensembl gene ids),
+  ``MGI_EntrezGene.rpt`` (NCBI Gene), and
+  ``MRK_SwissProt.rpt`` (UniProt). Today mouse rows only carry
+  ``symbol`` + ``mgi``; v0.6.1 fills the xref map.
+
+### v0.6.2 — Other model organisms
+- Zebrafish (ZFIN), C. elegans (WormBase), Drosophila (FlyBase) —
+  same pattern as MGI. Casing convention for each: zebrafish all-
+  lowercase (``mapk1``), Drosophila italic-but-mixed
+  (``mapk``, ``Egfr``). The casing heuristic might need
+  per-organism rules.
+
 ### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
 - `data/build_cl_concept_index.py` harvests CL for the cell-type
   vocabulary mentioned across the cell-atlas papers in the mini-corpus
