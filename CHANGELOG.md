@@ -1,5 +1,76 @@
 # Changelog
 
+## v0.7.0 — Repository metadata parsers (2026-05-28)
+
+### Added — `parsers/` subpackage
+
+Four parsers, one per common repository metadata format, sharing a
+uniform contract: take the raw input (text / JSON / directory) and
+return a ``list[dict]`` of claim dicts directly consumable by
+``BulkTranscriptomicsAdapter.enrich_claim``.
+
+- **`parse_geo_soft(text)`** — GEO SOFT format (the GEO's native text
+  serialisation). Tokenises ``^TYPE = id`` records and
+  ``!field = value`` lines, then walks ``^SERIES`` + ``^SAMPLE``
+  records. Emits ``consolidates_dataset`` claims for each
+  ``!Series_sample_id``, ``sequenced_on`` claims (deduplicated)
+  per distinct ``!Sample_instrument_model``, and
+  ``uses_database PubMed:<id>`` from ``!Series_pubmed_id``.
+- **`parse_ena_xml(xml_text)`** — ENA / SRA study & experiment XML.
+  Walks all ``<EXPERIMENT>`` elements, links each to its
+  ``<STUDY_REF>``, and reads the vendor-named child of ``<PLATFORM>``
+  to extract ``<INSTRUMENT_MODEL>``. Emits ``consolidates_dataset``
+  + ``sequenced_on`` claims.
+- **`parse_biostudies_json(text_or_obj)`** — BioStudies JSON
+  documents. Recursively flattens the ``section.attributes`` tree
+  into ``{name → value}``, recognises ``Organism`` / ``Pubmed`` /
+  ``Instrument`` / ``Platform``, emits study-level claims under the
+  document's ``accno`` accession.
+- **`parse_isa_tab(directory)`** — ISA-Tab investigation/study/assay
+  bundle. Reads ``i_*.txt`` for ``Study Identifier`` and
+  ``Study PubMed ID``, walks all ``s_*.txt`` for sample
+  ``Characteristics[organism]``, walks all ``a_*.txt`` for assay
+  ``Parameter Value[instrument model]``. Emits study-level claims
+  under the study identifier.
+
+### Added — species hint propagation
+
+All four parsers detect a recognised model-organism name in the
+relevant field (``!Sample_organism_ch1`` for GEO,
+``Characteristics[organism]`` for ISA-Tab, ``Organism`` attribute for
+BioStudies — ENA's organism is in the SAMPLE descriptor which v0.7.0
+doesn't yet parse) and attach a ``species`` hint to every emitted
+claim. The hint then drives the v0.6.0 species-aware gene resolver
+downstream, so gene mentions in a Tabula Muris-style claim emit
+correctly to MGI even when the LLM normalised casing.
+
+Recognised organisms: human / mouse / Drosophila / C. elegans /
+zebrafish / Nematostella.
+
+### Tests
+
+- 12 new tests in ``tests/test_parsers.py`` covering: per-parser
+  field extraction (organism, pubmed, instrument), the species-hint
+  detection path, end-to-end enrichment through
+  ``BulkTranscriptomicsAdapter`` for GEO SOFT (asserts
+  ``GSE168938 → GEO:GSE168938`` + ``Illumina NovaSeq 6000 →
+  EFO:0008637`` chain works), JSON-string vs dict input for
+  BioStudies, missing investigation fallback for ISA-Tab.
+
+### Notes
+
+- v0.7.0 is the **pipeline-entry** for repository metadata —
+  upstream of the adapter, downstream of the registry's native
+  format. Field coverage is minimum-viable: every parser extracts
+  the 3-4 fields most commonly populated; deepening to e.g.
+  ``Sample_characteristics_ch1`` sub-fields or ISA-Tab's
+  ``Comment[...]`` columns is left for v0.7.x as real use-cases
+  surface them.
+- The parsers are **stateless and pure** — no network calls, no
+  files written. Each function takes its input and returns its
+  list; the caller chooses how to feed the claims onward (most
+  often into ``adapter.enrich_claim`` one at a time).
+
 ## v0.6.3 — UniProt cross-refs for Drosophila / C. elegans / Zebrafish (2026-05-28)
 
 ### Added

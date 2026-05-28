@@ -2,7 +2,7 @@
 
 Transcriptomics-domain DomainAdapters for the [indicium](https://github.com/holobiomicslab/indicium) ecosystem.
 
-v0.6.2 ships two sibling adapters:
+v0.7.0 ships two sibling adapters + a `parsers/` subpackage:
 
 - **`BulkTranscriptomicsAdapter`** — bulk RNA-seq / microarray / time-series
   expression claims plus study-level assay metadata. Resolves repository
@@ -30,7 +30,21 @@ v0.6.2 ships two sibling adapters:
   UBERON anatomy index for the spatial-localisation qualifiers
   (`localized_in_tissue`, `localized_in_spatial_domain`), anchored on the
   Cheung et al. 2024 *Nematostella vectensis* Tomo-seq paper. Cell-type
-  enrichment via the Cell Ontology (CL) is on the v0.2.1 roadmap.
+  enrichment via the Cell Ontology (CL) shipped in v0.5.0.
+
+The **`parsers/`** subpackage (v0.7.0) turns repository-metadata
+documents into claim dicts ready for `enrich_claim`. Four parsers
+share the same `input → list[dict]` contract:
+
+- `parse_geo_soft(text)` — GEO SOFT format
+- `parse_ena_xml(xml_text)` — ENA / SRA XML
+- `parse_biostudies_json(text_or_obj)` — BioStudies JSON
+- `parse_isa_tab(directory)` — ISA-Tab investigation/study/assay bundle
+
+Each detects a recognised organism in the metadata and attaches a
+`species` hint to every emitted claim, so the downstream gene
+resolver picks the right organism without re-deriving it from the
+symbol casing.
 
 Both adapters also share a **concept index** (v0.3.0 → v0.5.0) — 92+
 verified CURIEs across four sources:

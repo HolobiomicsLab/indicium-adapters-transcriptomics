@@ -145,6 +145,26 @@ new benchmark papers reveal the need.
   cross-reference files per release. Join on FlyBase / WormBase
   id to populate ``ensembl`` for these rows.
 
+### v0.7.0 — Repository metadata parsers (done)
+- ``parsers/`` subpackage with four functions:
+  ``parse_geo_soft(text)``, ``parse_ena_xml(xml_text)``,
+  ``parse_biostudies_json(text_or_obj)``,
+  ``parse_isa_tab(directory)``. Uniform contract — input →
+  ``list[dict]`` of claim dicts directly fed to
+  ``adapter.enrich_claim``.
+- All four parsers extract a ``species`` hint from the organism
+  field (when recognised) and attach it to every emitted claim —
+  so downstream gene resolution picks the right organism even
+  when the LLM normalised symbol casing.
+
+### v0.7.x follow-ups
+- ENA: also parse ``<SAMPLE>`` descriptors (taxon id → organism
+  hint) and ``LIBRARY_DESCRIPTOR > LIBRARY_STRATEGY``.
+- ISA-Tab: parse ``Comment[<concept>]`` columns for finer
+  protocol / treatment metadata.
+- GEO: split ``!Sample_characteristics_ch1`` "tissue: X;
+  age: Y" into separate claims (currently kept as raw string).
+
 ### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
 - `data/build_cl_concept_index.py` harvests CL for the cell-type
   vocabulary mentioned across the cell-atlas papers in the mini-corpus

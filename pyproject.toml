@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "indicium-adapters-transcriptomics"
-version = "0.6.3"
+version = "0.7.0"
 description = "Transcriptomics-domain DomainAdapters for the indicium ecosystem"
 readme = "README.md"
 requires-python = ">=3.12"
