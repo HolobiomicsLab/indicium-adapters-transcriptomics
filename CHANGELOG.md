@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.6.1 — Mouse cross-references from MGI (Ensembl / Entrez / UniProt) (2026-05-28)
+
+### Added
+
+- `data/build_gene_index.py` now fetches three additional MGI
+  cross-reference reports and joins them on the MGI accession:
+  - `MRK_ENSEMBL.rpt` (16 MB) — mouse Ensembl gene id
+    (``ENSMUSG…``). Yield: 63,787 mouse rows enriched (~85%).
+  - `MGI_EntrezGene.rpt` (88 MB) — mouse NCBI Gene (Entrez) id.
+    Filtered to ``Status="O" AND Marker Type="Gene"``. Yield: 45,496
+    (~60%).
+  - `MRK_SwissProt_TrEMBL.rpt` (2 MB) — mouse UniProt accession
+    (first accession listed, may be either SwissProt-reviewed or
+    TrEMBL). Yield: 23,534 (~31%) — UniProt is dominated by
+    SwissProt coverage which is smaller than the full proteome.
+- All three files are downloaded to the same cache directory as
+  HGNC and MRK_List2 (``~/.cache/indicium-adapters-transcriptomics/``).
+  ``--mgi-ensembl-cache`` / ``--mgi-entrez-cache`` /
+  ``--mgi-uniprot-cache`` CLI options accept custom paths;
+  ``--no-mgi-xrefs`` skips the v0.6.1 enrichment entirely
+  (regression to the v0.6.0 minimal mouse rows).
+- ``build_gene_index._load_mgi_xrefs`` reads the three header-less,
+  positional MGI reports and merges them into a single
+  ``{MGI accession → {ensembl, ncbigene, uniprot}}`` dict consumed
+  by step 3 of ``build()``.
+
+### Tests
+
+- 1 new test pinning ``Mapk1``'s full xref map (MGI + Ensembl +
+  Entrez + UniProt) — catches regressions in any of the three MGI
+  report parsers.
+
+### Notes
+
+- Mouse rows now look semantically equivalent to human rows in
+  terms of xref coverage. A typical mouse claim like
+  ``Mapk1 differentially_expressed_in regenerating_tissue`` produces:
+  ``ontology_terms[subject] = MGI:1346858`` +
+  ``xrefs[subject] = {mgi=MGI:1346858, ensembl=ENSMUSG00000063358,
+  ncbigene=26413, uniprot=Q3UF82}``.
+- ``v0.6.0`` mouse rows that lacked these xrefs would now silently
+  re-enrich on adapter import — no API change.
+
 ## v0.6.0 — Mouse (MGI) gene index + species-aware lookup (2026-05-28)
 
 ### Added — MGI mouse gene catalogue

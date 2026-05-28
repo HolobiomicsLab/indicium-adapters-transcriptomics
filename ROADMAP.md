@@ -109,19 +109,28 @@ new benchmark papers reveal the need.
   (Nematostella + human HGNC ortholog) serve human lookups too.
 - Principal CURIE priority: HGNC > MGI > Ensembl > NCBIGene.
 
-### v0.6.1 — Mouse cross-refs
-- Extend ``build_gene_index.py`` to also fetch and join MGI's
-  ``MRK_ENSEMBL.rpt`` (mouse Ensembl gene ids),
-  ``MGI_EntrezGene.rpt`` (NCBI Gene), and
-  ``MRK_SwissProt.rpt`` (UniProt). Today mouse rows only carry
-  ``symbol`` + ``mgi``; v0.6.1 fills the xref map.
+### v0.6.1 — Mouse cross-refs (done)
+- ``build_gene_index.py`` fetches MGI's three xref reports
+  (``MRK_ENSEMBL.rpt``, ``MGI_EntrezGene.rpt``,
+  ``MRK_SwissProt_TrEMBL.rpt``) and joins them on the MGI
+  accession. ~85% of mouse rows ship Ensembl, ~60% ship Entrez,
+  ~31% ship UniProt (SwissProt coverage limit).
 
-### v0.6.2 — Other model organisms
-- Zebrafish (ZFIN), C. elegans (WormBase), Drosophila (FlyBase) —
-  same pattern as MGI. Casing convention for each: zebrafish all-
-  lowercase (``mapk1``), Drosophila italic-but-mixed
-  (``mapk``, ``Egfr``). The casing heuristic might need
-  per-organism rules.
+### v0.6.2 — Other model organisms (priority per user input)
+The most-used model organisms in transcriptomics beyond mouse
+(in roughly decreasing corpus prevalence):
+- **Drosophila melanogaster** — FlyBase symbols
+  (italic-mixed-case, e.g. ``mapk`` or ``Egfr``). CURIE prefix
+  ``FB:`` / ``FBgn:``.
+- **Caenorhabditis elegans** — WormBase symbols (italic-lowercase
+  with hyphens, e.g. ``unc-22``, ``daf-16``). CURIE prefix ``WB:``.
+- **Danio rerio (zebrafish)** — ZFIN symbols
+  (all-lowercase, e.g. ``mapk1``). CURIE prefix ``ZFIN:``.
+
+The casing-heuristic from v0.6.0 needs per-organism rules added:
+all-lowercase → zebrafish, lowercase-with-hyphens → C. elegans,
+mixed (no canonical pattern) → Drosophila. Or we lean harder on
+the optional ``species`` claim hint to resolve ambiguity.
 
 ### v0.5.0 — Cell Ontology (CL) cell-type enrichment + cascade fixes (done)
 - `data/build_cl_concept_index.py` harvests CL for the cell-type

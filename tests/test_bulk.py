@@ -323,6 +323,28 @@ def test_mgi_accession_resolves_directly():
     assert out["xrefs"]["subject"].get("mgi") == "MGI:1346858"
 
 
+def test_mouse_row_carries_full_xref_map():
+    """v0.6.1: mouse rows now ship Ensembl / NCBI Gene / UniProt
+    cross-references in addition to the MGI accession (parsed from
+    MRK_ENSEMBL.rpt, MGI_EntrezGene.rpt, MRK_SwissProt_TrEMBL.rpt).
+    Pin Mapk1's full xref map so a regression in any of the three
+    MGI report parsers is caught."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "Mapk1",
+        "qualifier": "differentially_expressed_in",
+        "object": "regenerating_tissue",
+    })
+    xrefs = out["xrefs"]["subject"]
+    assert xrefs.get("mgi") == "MGI:1346858"
+    assert xrefs.get("ensembl") == "ENSMUSG00000063358"
+    assert xrefs.get("ncbigene") == "26413"
+    # UniProt is the SwissProt-or-TrEMBL accession from MGI's report;
+    # the canonical SwissProt one for mouse Mapk1 is P63085 but MGI
+    # may list a TrEMBL accession first — accept any non-empty value.
+    assert xrefs.get("uniprot")
+
+
 def test_mouse_only_symbol_resolves_without_collision():
     """A mouse-specific gene with no human equivalent of the same
     name (the gene ``Xist`` exists in both species but its mouse

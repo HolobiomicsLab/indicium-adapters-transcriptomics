@@ -52,6 +52,19 @@ OUT_COLUMNS = (
 
 MGI_URL = "https://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
 
+# MGI cross-reference reports (v0.6.1). All three are header-less,
+# tab-separated, positional. Schemas read from sampled rows on the
+# upstream pages — re-verify if MGI ever changes their report layout.
+MGI_ENSEMBL_URL = (
+    "https://www.informatics.jax.org/downloads/reports/MRK_ENSEMBL.rpt"
+)
+MGI_ENTREZ_URL = (
+    "https://www.informatics.jax.org/downloads/reports/MGI_EntrezGene.rpt"
+)
+MGI_UNIPROT_URL = (
+    "https://www.informatics.jax.org/downloads/reports/MRK_SwissProt_TrEMBL.rpt"
+)
+
 
 def _first_token(value: object, separators: str = ",|;") -> str:
     """Return the first non-empty token of a multi-value string, stripped."""
@@ -91,17 +104,108 @@ def _download_hgnc(target: Path) -> None:
     )
 
 
-def _download_mgi(target: Path) -> None:
-    """Download the MGI marker list (MRK_List2.rpt)."""
+def _download_url(url: str, target: Path, *, tag: str) -> None:
+    """Generic resumable-ish file download to ``target``. ``tag`` is a short
+    label used in log lines."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    print(f"[mgi] downloading {MGI_URL} ...", file=sys.stderr)
-    r = requests.get(MGI_URL, stream=True, timeout=180)
+    print(f"[{tag}] downloading {url} ...", file=sys.stderr)
+    r = requests.get(url, stream=True, timeout=180)
     r.raise_for_status()
     with target.open("wb") as fh:
         for chunk in r.iter_content(chunk_size=1024 * 1024):
             if chunk:
                 fh.write(chunk)
-    print(f"[mgi] wrote {target} ({target.stat().st_size:,} bytes)", file=sys.stderr)
+    print(f"[{tag}] wrote {target} ({target.stat().st_size:,} bytes)", file=sys.stderr)
+
+
+def _download_mgi(target: Path) -> None:
+    """Download the MGI marker list (MRK_List2.rpt)."""
+    _download_url(MGI_URL, target, tag="mgi")
+
+
+def _load_mgi_xrefs(
+    ensembl_path: Path | None,
+    entrez_path: Path | None,
+    uniprot_path: Path | None,
+) -> dict[str, dict[str, str]]:
+    """Build a ``{MGI accession → {ensembl, ncbigene, uniprot}}`` map by
+    parsing the three MGI cross-reference reports.
+
+    All three reports are header-less, tab-separated. Column positions
+    are inlined here from upstream samples and noted at the URL
+    constants; re-verify if MGI changes the layout. Empty / withdrawn
+    rows are skipped.
+    """
+    out: dict[str, dict[str, str]] = {}
+
+    def _ensure(mgi_id: str) -> dict[str, str]:
+        if mgi_id not in out:
+            out[mgi_id] = {"ensembl": "", "ncbigene": "", "uniprot": ""}
+        return out[mgi_id]
+
+    if ensembl_path is not None and ensembl_path.is_file():
+        # MRK_ENSEMBL.rpt: col 0 = MGI id, col 5 = Ensembl Gene ID
+        # (single id). Always one Ensembl gene per row.
+        n = 0
+        with ensembl_path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 6:
+                    continue
+                mgi_id = parts[0].strip()
+                ensembl = parts[5].strip()
+                if mgi_id and ensembl:
+                    _ensure(mgi_id)["ensembl"] = ensembl
+                    n += 1
+        print(f"[mgi] indexed {n:,} MGI→Ensembl rows", file=sys.stderr)
+
+    if entrez_path is not None and entrez_path.is_file():
+        # MGI_EntrezGene.rpt: col 0 = MGI id, col 2 = Status (O / W),
+        # col 6 = Marker Type, col 8 = Entrez Gene ID. Filter to
+        # Status="O" (official) AND Marker Type="Gene" (some lines
+        # are withdrawn allele records with no Entrez id anyway).
+        n = 0
+        with entrez_path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 9:
+                    continue
+                mgi_id = parts[0].strip()
+                status = parts[2].strip()
+                marker_type = parts[6].strip()
+                entrez = parts[8].strip()
+                if (
+                    mgi_id
+                    and entrez
+                    and status == "O"
+                    and marker_type == "Gene"
+                ):
+                    _ensure(mgi_id)["ncbigene"] = entrez
+                    n += 1
+        print(f"[mgi] indexed {n:,} MGI→Entrez rows", file=sys.stderr)
+
+    if uniprot_path is not None and uniprot_path.is_file():
+        # MRK_SwissProt_TrEMBL.rpt: col 0 = MGI id, col 6 = UniProt
+        # accessions (space-separated). Take the first SwissProt-style
+        # accession.
+        n = 0
+        with uniprot_path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 7:
+                    continue
+                mgi_id = parts[0].strip()
+                uniprots = parts[6].strip().split()
+                if mgi_id and uniprots:
+                    _ensure(mgi_id)["uniprot"] = uniprots[0]
+                    n += 1
+        print(f"[mgi] indexed {n:,} MGI→UniProt rows", file=sys.stderr)
+
+    print(
+        f"[mgi] {len(out):,} MGI accessions carry at least one xref",
+        file=sys.stderr,
+    )
+    return out
 
 
 def _load_mgi(path: Path) -> list[dict[str, str]]:
@@ -205,7 +309,12 @@ def _load_hgnc(
 
 
 def build(
-    g2v2_path: Path, hgnc_path: Path, mgi_path: Path, out_path: Path
+    g2v2_path: Path,
+    hgnc_path: Path,
+    mgi_path: Path,
+    out_path: Path,
+    *,
+    mgi_xrefs: dict[str, dict[str, str]] | None = None,
 ) -> int:
     """Read G2V2 + HGNC + MGI, join, emit the bundled TSV. Return row count.
 
@@ -294,19 +403,34 @@ def build(
             })
             n_pure_hgnc += 1
 
-        # Step 3 — MGI mouse rows (v0.6.0).
+        # Step 3 — MGI mouse rows (v0.6.0+).
+        # v0.6.1 enriches each row with Ensembl / Entrez Gene /
+        # UniProt cross-references when ``mgi_xrefs`` is provided.
         mgi_rows = _load_mgi(mgi_path)
         n_mgi = 0
+        n_mgi_with_ensembl = 0
+        n_mgi_with_entrez = 0
+        n_mgi_with_uniprot = 0
         for row in mgi_rows:
+            xrefs = (mgi_xrefs or {}).get(row["mgi"], {})
+            ensembl = xrefs.get("ensembl", "")
+            ncbigene = xrefs.get("ncbigene", "")
+            uniprot = xrefs.get("uniprot", "")
+            if ensembl:
+                n_mgi_with_ensembl += 1
+            if ncbigene:
+                n_mgi_with_entrez += 1
+            if uniprot:
+                n_mgi_with_uniprot += 1
             w.writerow({
                 "symbol": row["symbol"],
                 "hgnc": "",
                 "mgi": row["mgi"],
-                "ensembl": "",
-                "ncbigene": "",
+                "ensembl": ensembl,
+                "ncbigene": ncbigene,
                 "nemve1": "",
                 "nvertx": "",
-                "uniprot": "",
+                "uniprot": uniprot,
                 "species": "mouse",
                 "description": row["name"],
             })
@@ -320,7 +444,10 @@ def build(
         f"         via symbol fallback : {n_via_symbol:,}\n"
         f"         Nematostella-only   : {n_nem_total - n_via_uniprot - n_via_symbol:,}\n"
         f"       Pure-HGNC (no Nemve1) : {n_pure_hgnc:,}\n"
-        f"       MGI (mouse)           : {n_mgi:,}",
+        f"       MGI (mouse)           : {n_mgi:,}\n"
+        f"         with Ensembl xref   : {n_mgi_with_ensembl:,}\n"
+        f"         with Entrez xref    : {n_mgi_with_entrez:,}\n"
+        f"         with UniProt xref   : {n_mgi_with_uniprot:,}",
         file=sys.stderr,
     )
     return n_total
@@ -358,6 +485,27 @@ def main(argv: list[str] | None = None) -> int:
         default=cache_dir / "MRK_List2.rpt",
         help="Where to cache the downloaded MGI report.",
     )
+    # v0.6.1 — MGI cross-reference reports (Ensembl / Entrez / UniProt).
+    parser.add_argument(
+        "--mgi-ensembl-cache", type=Path,
+        default=cache_dir / "MRK_ENSEMBL.rpt",
+        help="Where to cache MGI's MRK_ENSEMBL.rpt (mouse Ensembl xrefs).",
+    )
+    parser.add_argument(
+        "--mgi-entrez-cache", type=Path,
+        default=cache_dir / "MGI_EntrezGene.rpt",
+        help="Where to cache MGI's MGI_EntrezGene.rpt (mouse NCBI Gene xrefs).",
+    )
+    parser.add_argument(
+        "--mgi-uniprot-cache", type=Path,
+        default=cache_dir / "MRK_SwissProt_TrEMBL.rpt",
+        help="Where to cache MGI's MRK_SwissProt_TrEMBL.rpt (mouse UniProt xrefs).",
+    )
+    parser.add_argument(
+        "--no-mgi-xrefs", action="store_true",
+        help="Skip the v0.6.1 mouse Ensembl/Entrez/UniProt xref join "
+             "(emits mouse rows with empty xref columns).",
+    )
     args = parser.parse_args(argv)
     hgnc_path = args.hgnc_tsv
     if hgnc_path is None:
@@ -369,7 +517,26 @@ def main(argv: list[str] | None = None) -> int:
         if not args.mgi_cache.is_file():
             _download_mgi(args.mgi_cache)
         mgi_path = args.mgi_cache
-    build(args.g2v2_xlsx, hgnc_path, mgi_path, args.out)
+
+    mgi_xrefs: dict[str, dict[str, str]] | None = None
+    if not args.no_mgi_xrefs:
+        for url, cache in (
+            (MGI_ENSEMBL_URL, args.mgi_ensembl_cache),
+            (MGI_ENTREZ_URL, args.mgi_entrez_cache),
+            (MGI_UNIPROT_URL, args.mgi_uniprot_cache),
+        ):
+            if not cache.is_file():
+                _download_url(url, cache, tag="mgi-xref")
+        mgi_xrefs = _load_mgi_xrefs(
+            args.mgi_ensembl_cache,
+            args.mgi_entrez_cache,
+            args.mgi_uniprot_cache,
+        )
+
+    build(
+        args.g2v2_xlsx, hgnc_path, mgi_path, args.out,
+        mgi_xrefs=mgi_xrefs,
+    )
     return 0
 
 
