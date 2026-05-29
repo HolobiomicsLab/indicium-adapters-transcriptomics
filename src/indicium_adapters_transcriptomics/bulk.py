@@ -113,6 +113,14 @@ class BulkTranscriptomicsAdapter:
       ``aligned_with``, ``quantified_with``, ``normalized_with``,
       ``tested_with``, ``uses_database``, ``consolidates_dataset``.
 
+    Every qualifier in the ``qualifiers`` frozenset MUST match
+    ``^[a-z][a-z0-9_]*$`` (snake_case). Required by indicium >= 1.7.0:
+    Perspicacite routes adapter qualifiers to the open
+    ``asb:domainQualifier`` slot, whose SHACL shape enforces exactly this
+    pattern. Non-conforming values would be silently rejected by
+    ``indicium.validate_graph`` at the RDF boundary. The constraint is
+    enforced by ``tests/test_protocol_conformance.py``.
+
     Single-cell qualifiers (cell-type markers, cluster enrichment, spatial
     localisation) belong in ``SingleCellTranscriptomicsAdapter`` so the two
     sibling adapters stay disjoint.

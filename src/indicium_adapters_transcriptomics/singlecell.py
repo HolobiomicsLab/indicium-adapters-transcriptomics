@@ -58,6 +58,14 @@ class SingleCellTranscriptomicsAdapter:
     Bulk expression qualifiers such as ``differentially_expressed_in`` and
     ``marker_of`` stay on ``BulkTranscriptomicsAdapter`` to keep the two
     sibling qualifier sets disjoint.
+
+    Every qualifier in the ``qualifiers`` frozenset MUST match
+    ``^[a-z][a-z0-9_]*$`` (snake_case). Required by indicium >= 1.7.0:
+    Perspicacite routes adapter qualifiers to the open
+    ``asb:domainQualifier`` slot, whose SHACL shape enforces exactly this
+    pattern. Non-conforming values would be silently rejected by
+    ``indicium.validate_graph`` at the RDF boundary. The constraint is
+    enforced by ``tests/test_protocol_conformance.py``.
     """
 
     domain_id = "single-cell-transcriptomics"
