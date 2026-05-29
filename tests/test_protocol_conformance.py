@@ -111,14 +111,41 @@ def test_domain_id_is_canonical(adapter_cls):
     "adapter_cls", ALL_ADAPTER_CLASSES, ids=lambda c: c.domain_id
 )
 def test_qualifiers_are_all_snake_case(adapter_cls):
-    """Extraction prompts, SPARQL templates, and downstream RDF
-    serialisations depend on this convention. CamelCase or kebab-case
-    qualifiers would break those."""
+    """Every adapter qualifier must match ``^[a-z][a-z0-9_]*$``.
+
+    Required by indicium >= 1.7.0: Perspicacite routes adapter qualifiers
+    to the open ``asb:domainQualifier`` slot whose SHACL shape enforces
+    exactly this pattern. Non-conforming values would be silently rejected
+    by ``indicium.validate_graph``. Extraction prompts and SPARQL
+    templates also depend on the convention; CamelCase or kebab-case
+    qualifiers would break those too.
+    """
     non_snake = [
         q for q in adapter_cls.qualifiers if not _SNAKE_CASE.match(q)
     ]
     assert not non_snake, (
         f"{adapter_cls.domain_id}: non-snake_case qualifiers: {non_snake}"
+    )
+
+
+def test_every_discovered_adapter_qualifier_is_snake_case():
+    """Defence-in-depth: the parametrised test above iterates over the
+    hardcoded ``ALL_ADAPTER_CLASSES`` tuple, which a future sibling could
+    bypass if its entry-point is added to ``pyproject.toml`` but its
+    class is forgotten in the tuple. This variant goes through the
+    indicium-adapters discovery helper instead, so any adapter registered
+    under ``indicium.adapters`` is checked, even if the test module has
+    not been updated for it.
+    """
+    discovered = discover_adapters()
+    offenders: list[tuple[str, str]] = []
+    for name, adapter in discovered.items():
+        for q in adapter.qualifiers:
+            if not _SNAKE_CASE.match(q):
+                offenders.append((name, q))
+    assert not offenders, (
+        "non-snake_case qualifiers on discovered adapters: "
+        + ", ".join(f"{name}:{q}" for name, q in offenders)
     )
 
 

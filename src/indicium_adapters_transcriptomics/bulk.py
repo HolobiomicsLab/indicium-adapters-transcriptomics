@@ -121,6 +121,13 @@ class BulkTranscriptomicsAdapter:
     domain_id = "bulk-transcriptomics"
     api_version = 1
 
+    # Every qualifier MUST match ``^[a-z][a-z0-9_]*$`` (snake_case).
+    # Required by indicium >= 1.7.0: at serialisation time, Perspicacite
+    # routes any qualifier from this set to ``asb:domainQualifier`` (the
+    # open slot for domain vocabularies), which enforces the snake_case
+    # pattern at the SHACL boundary. Non-conforming values would be
+    # rejected by ``indicium.validate_graph``. Enforced for the package
+    # by ``tests/test_protocol_conformance.py``.
     qualifiers: frozenset[str] = frozenset({
         # Claim-level assertions about features (genes / transcripts / sets).
         "differentially_expressed_in",
