@@ -288,71 +288,12 @@ class GeneIndex:
 GENE_INDEX: Final[GeneIndex] = GeneIndex(_load_gene_index_rows())
 
 
-# --- Anatomy index ---------------------------------------------------------
-
-_ANATOMY_INDEX_COLUMNS: Final[tuple[str, ...]] = (
-    "term", "uberon", "label", "description", "source",
-)
-
-
-def _load_anatomy_index_rows() -> list[dict[str, str]]:
-    """Read the bundled anatomy_index.tsv and return its rows as dicts."""
-    tsv = files("indicium_adapters_transcriptomics.data").joinpath(
-        "anatomy_index.tsv"
-    )
-    with tsv.open("r", encoding="utf-8", newline="") as fh:
-        reader = csv.DictReader(fh, delimiter="\t")
-        if tuple(reader.fieldnames or ()) != _ANATOMY_INDEX_COLUMNS:
-            raise RuntimeError(
-                "anatomy_index.tsv header does not match the declared schema. "
-                f"Expected {_ANATOMY_INDEX_COLUMNS!r}; got "
-                f"{tuple(reader.fieldnames or ())!r}."
-            )
-        return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
-
-
-class AnatomyIndex:
-    """Case-insensitive anatomical-term to UBERON CURIE lookup.
-
-    The bundled set is intentionally small: hand-curated from a reference
-    paper and verified against the EBI OLS4 UBERON index by
-    ``data/build_anatomy_index.py`` at build time. Cnidarian-specific
-    structures (physa, oral / aboral pole, mesoglea, gastrodermis) are not
-    represented in UBERON as of 2026, so they are not in the table.
-    """
-
-    def __init__(self, rows: list[dict[str, str]]):
-        self._rows = rows
-        # Two lower-cased indexes: the user-facing ``term`` column and the
-        # canonical UBERON ``label`` column. Lookup tries both.
-        self._by_term: dict[str, dict[str, str]] = {
-            row["term"].lower(): row for row in rows if row["term"]
-        }
-        self._by_label: dict[str, dict[str, str]] = {
-            row["label"].lower(): row for row in rows if row["label"]
-        }
-
-    def lookup(self, name: str) -> dict[str, str] | None:
-        """Return the matching row, or ``None``.
-
-        Tries the ``term`` column first, then falls back to the canonical
-        UBERON ``label``. Both are case-insensitive.
-        """
-        if not isinstance(name, str):
-            return None
-        token = name.strip().lower()
-        if not token:
-            return None
-        return self._by_term.get(token) or self._by_label.get(token)
-
-    def __len__(self) -> int:
-        return len(self._rows)
-
-
-ANATOMY_INDEX: Final[AnatomyIndex] = AnatomyIndex(_load_anatomy_index_rows())
-
-
-# --- Concept index ---------------------------------------------------------
+# --- Shared concept-index TSV reader --------------------------------------
+#
+# The concept index proper is loaded further down in this module, but both
+# the anatomy loader (organism-paired ontologies) and the concept loader
+# read TSVs in the same format. The reader is hoisted up here so the
+# anatomy loader can call it without a forward reference.
 
 _CONCEPT_INDEX_COLUMNS: Final[tuple[str, ...]] = (
     "term", "curie", "label", "description", "ontology", "source",
@@ -382,6 +323,211 @@ def _load_one_concept_tsv(filename: str) -> list[dict[str, str]]:
                 f"{tuple(reader.fieldnames or ())!r}."
             )
         return [{k: (v or "").strip() for k, v in row.items()} for row in reader]
+
+
+# --- Anatomy index ---------------------------------------------------------
+
+# The on-disk anatomy_index.tsv (UBERON, species-agnostic) keeps its
+# original schema with the ``uberon`` column. Organism-paired ontologies
+# (FBbt, WBbt, ZFA, EMAPA) live in concept-index-shaped TSVs already
+# bundled for the concept index. The loader below normalises both shapes
+# into a single unified row dict carrying ``term``, ``curie``, ``label``,
+# ``description``, ``ontology``, ``species``, ``source``.
+_UBERON_ANATOMY_COLUMNS: Final[tuple[str, ...]] = (
+    "term", "uberon", "label", "description", "source",
+)
+
+# Organism-paired anatomy ontologies that already ship as concept-index
+# TSVs and can be re-used as anatomy lookups when a species hint is
+# provided. Each tuple is ``(filename, species_tag, ontology_label)``.
+# XPO (Xenopus phenotype) is left in the concept index only because it
+# describes phenotypes, not anatomy proper.
+_ORGANISM_ANATOMY_SOURCES: Final[tuple[tuple[str, str, str], ...]] = (
+    ("fbbt_concept_index.tsv",  "drosophila", "FBbt"),
+    ("wbbt_concept_index.tsv",  "celegans",   "WBbt"),
+    ("zfa_concept_index.tsv",   "zebrafish",  "ZFA"),
+    ("emapa_concept_index.tsv", "mouse",      "EMAPA"),
+)
+
+
+def _load_uberon_anatomy_rows() -> list[dict[str, str]]:
+    """Read the bundled anatomy_index.tsv (UBERON, species-agnostic) and
+    normalise each row into the unified anatomy schema."""
+    tsv = files("indicium_adapters_transcriptomics.data").joinpath(
+        "anatomy_index.tsv"
+    )
+    with tsv.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if tuple(reader.fieldnames or ()) != _UBERON_ANATOMY_COLUMNS:
+            raise RuntimeError(
+                "anatomy_index.tsv header does not match the declared schema. "
+                f"Expected {_UBERON_ANATOMY_COLUMNS!r}; got "
+                f"{tuple(reader.fieldnames or ())!r}."
+            )
+        out: list[dict[str, str]] = []
+        for raw in reader:
+            row = {k: (v or "").strip() for k, v in raw.items()}
+            out.append({
+                "term":        row["term"],
+                "curie":       row["uberon"],
+                "label":       row["label"],
+                "description": row["description"],
+                "ontology":    "UBERON",
+                "species":     "",  # species-agnostic
+                "source":      row["source"],
+            })
+        return out
+
+
+def _load_organism_anatomy_rows(
+    filename: str, species: str, ontology: str,
+) -> list[dict[str, str]]:
+    """Read an organism-paired concept-index TSV (FBbt/WBbt/ZFA/EMAPA)
+    and normalise each row into the unified anatomy schema.
+
+    Tolerant of a missing file (returns ``[]``): an adapter build that
+    has not yet regenerated the organism-paired ontology index should
+    still import cleanly.
+    """
+    rows = _load_one_concept_tsv(filename)
+    out: list[dict[str, str]] = []
+    for row in rows:
+        # Honour the ontology column when present, fall back to the
+        # caller-supplied default. Both should agree in practice.
+        ont = row.get("ontology") or ontology
+        out.append({
+            "term":        row["term"],
+            "curie":       row["curie"],
+            "label":       row["label"],
+            "description": row.get("description", ""),
+            "ontology":    ont,
+            "species":     species,
+            "source":      row.get("source", ""),
+        })
+    return out
+
+
+def _load_anatomy_index_rows() -> list[dict[str, str]]:
+    """Load every bundled anatomy source into one unified row list.
+
+    Sources, in load order:
+
+    1. ``anatomy_index.tsv`` (UBERON, species-agnostic).
+    2. ``fbbt_concept_index.tsv`` (Drosophila anatomy).
+    3. ``wbbt_concept_index.tsv`` (C. elegans anatomy).
+    4. ``zfa_concept_index.tsv`` (zebrafish anatomy).
+    5. ``emapa_concept_index.tsv`` (mouse developmental anatomy).
+
+    A given lookup key (e.g. ``"embryo"``) can appear across multiple
+    ontologies. The picker in ``AnatomyIndex._pick_candidate`` then
+    chooses between them using the species hint and a UBERON-first
+    fallback so collisions resolve deterministically.
+
+    The same organism-paired TSVs are also loaded by the concept index;
+    that duplication is intentional. The anatomy resolver gets first
+    crack at organism-specific spatial terms when a species hint is
+    given, and the concept resolver still catches the same terms when
+    no hint is supplied.
+    """
+    rows: list[dict[str, str]] = _load_uberon_anatomy_rows()
+    for filename, species, ontology in _ORGANISM_ANATOMY_SOURCES:
+        rows.extend(_load_organism_anatomy_rows(filename, species, ontology))
+    return rows
+
+
+class AnatomyIndex:
+    """Case-insensitive multi-species anatomical-term to CURIE lookup.
+
+    Each bundled anatomy source contributes rows with a common shape:
+    ``{term, curie, label, description, ontology, species, source}``.
+    Species values are ``""`` (UBERON, species-agnostic) or the
+    organism tag matching one of the bulk-adapter's recognised species
+    (``drosophila``, ``celegans``, ``zebrafish``, ``mouse``).
+
+    Lookup is two-stage:
+
+    1. Find every row whose ``term`` or canonical ``label`` matches the
+       input string (case-insensitive).
+    2. Pick one row using the species hint plus a deterministic fallback:
+       species-tag exact match, then species-agnostic UBERON, then load
+       order.
+
+    Cnidarian-specific structures (physa, oral / aboral pole, mesoglea,
+    gastrodermis) are not represented in UBERON as of 2026 and are
+    documented as triaged out of the curated bundle.
+    """
+
+    def __init__(self, rows: list[dict[str, str]]):
+        self._rows = rows
+        # Multi-row indexes so the same lookup key can resolve to several
+        # organism-specific ontologies. The picker then chooses based on
+        # species hint or load order.
+        self._by_term: dict[str, list[dict[str, str]]] = {}
+        self._by_label: dict[str, list[dict[str, str]]] = {}
+        for row in rows:
+            if row.get("term"):
+                self._by_term.setdefault(row["term"].lower(), []).append(row)
+            if row.get("label"):
+                self._by_label.setdefault(row["label"].lower(), []).append(row)
+
+    def lookup(
+        self, name: str, *, species: str | None = None,
+    ) -> dict[str, str] | None:
+        """Return the matching row, or ``None``.
+
+        Tries the ``term`` column first, then falls back to the canonical
+        ``label``. Both are case-insensitive.
+
+        ``species`` is an optional hint such as ``"mouse"`` /
+        ``"drosophila"`` / ``"celegans"`` / ``"zebrafish"``. When given,
+        species-specific entries (EMAPA / FBbt / WBbt / ZFA) are
+        preferred over species-agnostic UBERON entries for the same
+        term. Without a hint, UBERON wins.
+        """
+        if not isinstance(name, str):
+            return None
+        token = name.strip().lower()
+        if not token:
+            return None
+        candidates = self._by_term.get(token) or self._by_label.get(token) or []
+        if not candidates:
+            return None
+        return self._pick_candidate(candidates, species)
+
+    @staticmethod
+    def _pick_candidate(
+        candidates: list[dict[str, str]], species: str | None,
+    ) -> dict[str, str]:
+        """Apply the two-rule disambiguation to a list of anatomy candidates."""
+        if len(candidates) == 1:
+            return candidates[0]
+        # Rule 1: explicit species hint wins when an entry tags that species.
+        if species:
+            for row in candidates:
+                if row.get("species") == species:
+                    return row
+        # Rule 2: species-agnostic UBERON entries win when no hint matches.
+        for row in candidates:
+            if not row.get("species"):
+                return row
+        # Rule 3: defensive load-order fallback. Should not be reached when
+        # at least one UBERON entry exists for the term.
+        return candidates[0]
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+
+ANATOMY_INDEX: Final[AnatomyIndex] = AnatomyIndex(_load_anatomy_index_rows())
+
+
+# --- Concept index ---------------------------------------------------------
+#
+# ``_CONCEPT_INDEX_COLUMNS`` and ``_load_one_concept_tsv`` are defined earlier
+# in the file (just before the anatomy section) because the anatomy loader
+# reuses the same TSV reader to consume the organism-paired ontology indexes
+# (FBbt / WBbt / ZFA / EMAPA). Keeping the helper near the top avoids a
+# forward reference.
 
 
 def _load_concept_index_rows() -> list[dict[str, str]]:
@@ -560,20 +706,32 @@ def resolve_gene(
 def resolve_anatomy(
     name: str, *, species: str | None = None
 ) -> tuple[str, dict[str, str]] | None:
-    """Resolve ``name`` to a UBERON anatomy CURIE and xrefs.
+    """Resolve ``name`` to an anatomy CURIE and xrefs via ``ANATOMY_INDEX``.
 
-    ``species`` is accepted for signature uniformity (the bulk and
-    single-cell dispatchers pass it to every resolver) but UBERON is a
-    multi-species ontology, so the hint is ignored here.
+    ``species`` is forwarded to ``ANATOMY_INDEX.lookup`` so organism-paired
+    ontologies (FBbt for Drosophila, WBbt for C. elegans, ZFA for
+    zebrafish, EMAPA for mouse) can be picked when an explicit hint is
+    given. Without a hint, species-agnostic UBERON entries win.
+
+    The returned ``xrefs`` dict carries ``curie``, ``label``,
+    ``ontology`` (e.g. ``"UBERON"``, ``"FBbt"``, ``"EMAPA"``), and the
+    optional ``species`` tag and ``description``. The pre-v0.12 shape
+    that used a dedicated ``uberon`` key has been replaced because the
+    resolver is no longer UBERON-only.
     """
-    del species
-    row = ANATOMY_INDEX.lookup(name)
+    row = ANATOMY_INDEX.lookup(name, species=species)
     if row is None:
         return None
-    xref = {"uberon": row["uberon"], "label": row["label"]}
+    xref = {
+        "curie":    row["curie"],
+        "label":    row["label"],
+        "ontology": row["ontology"],
+    }
+    if row.get("species"):
+        xref["species"] = row["species"]
     if row.get("description"):
         xref["description"] = row["description"]
-    return row["uberon"], xref
+    return row["curie"], xref
 
 
 def resolve_concept(

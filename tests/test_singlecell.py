@@ -93,8 +93,13 @@ def test_enrich_claim_returns_new_dict():
 
 
 def test_enrich_claim_resolves_uberon_anatomy_in_object_slot():
-    """`localized_in_tissue` typically uses a gene as subject and an
-    anatomical term as object — the object slot should pick up UBERON."""
+    """``localized_in_tissue`` typically uses a gene as subject and an
+    anatomical term as object: the object slot should pick up UBERON.
+
+    The xref payload uses the generic ``curie`` / ``ontology`` / ``label``
+    keys so the shape is uniform with what the organism-paired
+    ontologies (FBbt / WBbt / ZFA / EMAPA) also emit.
+    """
     a = SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "MMP9",
@@ -103,7 +108,8 @@ def test_enrich_claim_resolves_uberon_anatomy_in_object_slot():
     })
     assert out["ontology_terms"]["object"] == "UBERON:0002095"
     xrefs = out["xrefs"]["object"]
-    assert xrefs["uberon"] == "UBERON:0002095"
+    assert xrefs["curie"] == "UBERON:0002095"
+    assert xrefs["ontology"] == "UBERON"
     assert xrefs["label"].lower() == "mesentery"
 
 
@@ -139,7 +145,7 @@ def test_enrich_claim_leaves_cnidarian_specific_terms_alone():
 
 def test_enrich_claim_resolves_both_subject_and_object_slots():
     """An adapter that only enriches one of the two slots would be a
-    regression — both must be tried."""
+    regression: both must be tried."""
     a = SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "mesentery",
@@ -148,6 +154,90 @@ def test_enrich_claim_resolves_both_subject_and_object_slots():
     })
     assert out["ontology_terms"]["subject"] == "UBERON:0002095"
     assert out["ontology_terms"]["object"] == "UBERON:0006562"
+
+
+# --- multi-species anatomy resolution ---------------------------------------
+
+
+def test_anatomy_index_grew_to_include_organism_paired_ontologies():
+    """The anatomy index now merges UBERON (species-agnostic) with the
+    organism-paired FBbt / WBbt / ZFA / EMAPA TSVs. The floor of 100
+    catches a regression where one of the organism sources fails to load
+    (each adds ~20-35 rows on top of UBERON's 4)."""
+    assert len(ANATOMY_INDEX) > 100
+
+
+def test_anatomy_resolves_mouse_term_with_species_hint():
+    """Mouse developmental anatomy lives in EMAPA. With ``species="mouse"``
+    a term like ``limb bud`` should resolve to its EMAPA CURIE through the
+    anatomy resolver (no fallback to the concept index needed)."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "Shh",
+        "qualifier": "localized_in_tissue",
+        "object": "limb bud",
+        "species": "mouse",
+    })
+    assert out["ontology_terms"]["object"] == "EMAPA:35944"
+    xrefs = out["xrefs"]["object"]
+    assert xrefs["ontology"] == "EMAPA"
+    assert xrefs["species"] == "mouse"
+
+
+def test_anatomy_resolves_drosophila_term_with_species_hint():
+    """``wing disc`` is Drosophila-specific (FBbt). With the right species
+    hint the anatomy resolver picks the FBbt CURIE."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "dpp",
+        "qualifier": "localized_in_tissue",
+        "object": "wing disc",
+        "species": "drosophila",
+    })
+    assert out["ontology_terms"]["object"] == "FBbt:00001778"
+    assert out["xrefs"]["object"]["ontology"] == "FBbt"
+
+
+def test_anatomy_resolves_celegans_term_with_species_hint():
+    """``spermatheca`` is C. elegans-specific (WBbt)."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "unc-22",
+        "qualifier": "localized_in_tissue",
+        "object": "spermatheca",
+        "species": "celegans",
+    })
+    assert out["ontology_terms"]["object"] == "WBbt:0005319"
+    assert out["xrefs"]["object"]["ontology"] == "WBbt"
+
+
+def test_anatomy_resolves_zebrafish_term_with_species_hint():
+    """``swim bladder`` is zebrafish-unique (ZFA). EMAPA also has a
+    ``swim bladder`` synonym but with the zebrafish hint ZFA wins."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "sox2",
+        "qualifier": "localized_in_tissue",
+        "object": "swim bladder",
+        "species": "zebrafish",
+    })
+    assert out["ontology_terms"]["object"] == "ZFA:0000076"
+    assert out["xrefs"]["object"]["ontology"] == "ZFA"
+
+
+def test_uberon_term_resolves_regardless_of_species_hint():
+    """UBERON entries are species-agnostic. ``mesentery`` should resolve
+    to ``UBERON:0002095`` whether or not a species hint is passed."""
+    a = SingleCellTranscriptomicsAdapter()
+    for hint in (None, "mouse", "drosophila", "celegans"):
+        claim = {"subject": "x", "qualifier": "localized_in_tissue", "object": "mesentery"}
+        if hint:
+            claim["species"] = hint
+        out = a.enrich_claim(claim)
+        assert out["ontology_terms"]["object"] == "UBERON:0002095", (
+            f"mesentery should resolve to UBERON regardless of species hint "
+            f"{hint!r}, got {out['ontology_terms'].get('object')!r}"
+        )
 
 
 # --- gene enrichment for single-cell (v0.4.0) -------------------------------

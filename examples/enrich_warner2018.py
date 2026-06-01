@@ -260,11 +260,10 @@ def main() -> int:
             for slot, xref in xrefs.items():
                 # Compress the xrefs map to the principal id key plus the
                 # human-readable label, so the demo output stays scannable.
-                principal = (
-                    xref.get("hgnc")
-                    or xref.get("uberon")
-                    or xref.get("curie")
-                )
+                # ``hgnc`` covers gene xrefs (which still use per-namespace
+                # keys), ``curie`` covers anatomy + concept xrefs (which use
+                # the generic shape since the multi-species anatomy refactor).
+                principal = xref.get("hgnc") or xref.get("curie")
                 label = xref.get("label", "")
                 if label:
                     print(f"          xrefs[{slot}] : {principal} \"{label}\"")
