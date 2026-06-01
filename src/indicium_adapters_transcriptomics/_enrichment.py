@@ -561,9 +561,14 @@ def _load_concept_index_rows() -> list[dict[str, str]]:
     17. ``zfa_concept_index.tsv``       Zebrafish anatomy (Tier-2).
     18. ``emapa_concept_index.tsv``     Mouse anatomy (Tier-2).
     19. ``xpo_concept_index.tsv``       Xenopus phenotype (Tier-2).
+    20. ``go_concept_index.tsv``        GO biological process / molecular
+        function concrete terms (v0.12).
+    21. ``zp_concept_index.tsv``        Zebrafish Phenotype (v0.12,
+        re-tried with canonical-form candidates).
 
-    Four candidate ontologies (EC, RXNO, HCAO, ZP) were evaluated and
-    deferred to a later release. See ``data/build_extra_ontology_indexes.py``
+    Two candidate ontologies (RXNO, HCAO) remain deferred because they
+    re-publish CHEBI and CL terms respectively, with low effective
+    transcripto yield. See ``data/build_extra_ontology_indexes.py``
     for the per-ontology rationale.
     """
     sources = (
@@ -589,6 +594,12 @@ def _load_concept_index_rows() -> list[dict[str, str]]:
         "zfa_concept_index.tsv",
         "emapa_concept_index.tsv",
         "xpo_concept_index.tsv",
+        # v0.12 expansion: GO biological-process / molecular-function
+        # concrete terms (the static concept_index.tsv only shipped the
+        # three GO roots), and ZP zebrafish phenotype re-tried with
+        # canonical-form candidates.
+        "go_concept_index.tsv",
+        "zp_concept_index.tsv",
     )
     rows: list[dict[str, str]] = []
     for filename in sources:

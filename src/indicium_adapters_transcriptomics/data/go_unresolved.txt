@@ -1,0 +1,10 @@
+# Candidates for GO that did not match via exact or prefix mode.
+# Either the candidate name is too informal / non-canonical
+# (e.g. an acronym not declared as a synonym in OLS4) or
+# the ontology genuinely doesn't cover this term.
+# Format: one term per line.
+
+JAK-STAT cascade
+embryonic development
+cell proliferation
+transcription factor activity

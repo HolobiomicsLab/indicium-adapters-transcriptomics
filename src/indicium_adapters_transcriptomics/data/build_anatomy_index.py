@@ -42,12 +42,20 @@ class Query(NamedTuple):
     source: str         # short string identifying provenance
 
 
-# Anatomy terms drawn from Cheung et al. 2024 plus a couple of generic
+# Anatomy terms drawn from Cheung et al. 2024 plus generic
 # concepts useful as anatomical-region anchors. Each is searched against
 # UBERON; entries that don't yield a label exactly matching (or starting
 # with) the query are dropped; see TRIAGED_OUT at the bottom of this
 # file for terms known not to have a UBERON entry.
+#
+# v0.12 expansion: high-frequency mammalian / human organs and tissues
+# cited in Tabula Sapiens (human single-cell atlas), Tirosh 2016
+# (melanoma), and any single-cell paper that maps cells back to a
+# tissue of origin. EMAPA (mouse developmental anatomy) now covers
+# mouse-specific terms via the multi-species anatomy resolver, so this
+# list focuses on adult mammalian anatomy that UBERON encodes.
 CURATED_TERMS: tuple[Query, ...] = (
+    # --- Cheung 2024 + general anchors (original v0.2.0 set) -------------
     Query("mesentery", "Cheung 2024"),
     Query("pharynx", "Cheung 2024"),
     Query("tentacle", "Cheung 2024"),
@@ -60,6 +68,50 @@ CURATED_TERMS: tuple[Query, ...] = (
     Query("body cavity", "general"),
     Query("organism subdivision", "general"),
     Query("anatomical region", "general"),
+    # --- v0.12 expansion: nervous system ---------------------------------
+    Query("brain",            "Tabula Sapiens / atlas"),
+    Query("cerebral cortex",  "Tabula Sapiens / atlas"),
+    Query("cerebellum",       "Tabula Sapiens / atlas"),
+    Query("hippocampus",      "Tabula Sapiens / atlas"),
+    Query("hypothalamus",     "Tabula Sapiens / atlas"),
+    Query("spinal cord",      "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: digestive --------------------------------------
+    Query("liver",            "Tabula Sapiens / atlas"),
+    Query("pancreas",         "Tabula Sapiens / atlas"),
+    Query("stomach",          "Tabula Sapiens / atlas"),
+    Query("intestine",        "Tabula Sapiens / atlas"),
+    Query("small intestine",  "Tabula Sapiens / atlas"),
+    Query("colon",            "Tabula Sapiens / atlas"),
+    Query("esophagus",        "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: respiratory ------------------------------------
+    Query("lung",             "Tabula Sapiens / atlas"),
+    Query("trachea",          "Tabula Sapiens / atlas"),
+    Query("alveolus",         "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: circulatory ------------------------------------
+    Query("heart",            "Tabula Sapiens / atlas"),
+    Query("aorta",            "Tabula Sapiens / atlas"),
+    Query("blood vessel",     "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: urinary + reproductive -------------------------
+    Query("kidney",           "Tabula Sapiens / atlas"),
+    Query("urinary bladder",  "Tabula Sapiens / atlas"),
+    Query("ovary",            "Tabula Sapiens / atlas"),
+    Query("testis",           "Tabula Sapiens / atlas"),
+    Query("uterus",           "Tabula Sapiens / atlas"),
+    Query("prostate gland",   "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: endocrine --------------------------------------
+    Query("thyroid gland",    "Tabula Sapiens / atlas"),
+    Query("adrenal gland",    "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: lymphoid + immune ------------------------------
+    Query("spleen",           "Tabula Sapiens / atlas"),
+    Query("thymus",           "Tabula Sapiens / atlas"),
+    Query("lymph node",       "Tabula Sapiens / atlas"),
+    Query("bone marrow",      "Tabula Sapiens / atlas"),
+    # --- v0.12 expansion: integument + musculoskeletal -------------------
+    Query("skin",             "Tirosh 2016 / Tabula Sapiens"),
+    Query("dermis",           "Tabula Sapiens / atlas"),
+    Query("bone",             "Tabula Sapiens / atlas"),
+    Query("cartilage",        "Tabula Sapiens / atlas"),
+    Query("muscle",           "Tabula Sapiens / atlas"),
 )
 
 

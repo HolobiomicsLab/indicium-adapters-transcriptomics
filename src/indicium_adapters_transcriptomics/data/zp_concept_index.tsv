@@ -1,0 +1,10 @@
+term	curie	label	description	ontology	source
+neural tube morphology, abnormal	ZP:0000168	neural tube morphology, abnormal	Abnormal(ly) morphology (of) neural tube.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+somite morphology, abnormal	ZP:0000012	somite morphology, abnormal	Abnormal(ly) morphology (of) somite.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+notochord morphology, abnormal	ZP:0000624	notochord morphology, abnormal	Abnormal(ly) morphology (of) notochord.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+fin morphology, abnormal	ZP:0004992	fin morphology, abnormal	Abnormal(ly) morphology (of) fin.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+pectoral fin morphology, abnormal	ZP:0001610	pectoral fin morphology, abnormal	Abnormal(ly) morphology (of) pectoral fin.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+heart morphology, abnormal	ZP:0000107	heart morphology, abnormal	Abnormal(ly) morphology (of) heart.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+blood vessel morphology, abnormal	ZP:0012425	blood vessel morphology, abnormal	Abnormal(ly) morphology (of) blood vessel.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+eye morphology, abnormal	ZP:0000943	eye morphology, abnormal	Abnormal(ly) morphology (of) eye.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)
+swim bladder morphology, abnormal	ZP:0000392	swim bladder morphology, abnormal	Abnormal(ly) morphology (of) swim bladder.	ZP	v0.8.0 ontology harvest (zebrafish_phenotype, exact-match)

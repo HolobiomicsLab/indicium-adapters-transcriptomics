@@ -457,6 +457,85 @@ XPO_CANDIDATES: tuple[str, ...] = (
 )
 
 
+# ZP (Zebrafish Phenotype Ontology) candidates: high-frequency abnormal-
+# phenotype terms cited in zebrafish transcriptomics literature
+# (Wagner 2018, knockdown / knockout phenotypes). ZP labels follow the
+# pattern ``<entity> <quality> [, abnormal]`` so we list them in that
+# canonical form. The cascade picks via exact label match.
+ZP_CANDIDATES: tuple[str, ...] = (
+    # Morphology of developmental structures
+    "neural tube morphology, abnormal",
+    "somite morphology, abnormal",
+    "notochord morphology, abnormal",
+    "fin morphology, abnormal",
+    "pectoral fin morphology, abnormal",
+    # Cardiac / circulation
+    "heart morphology, abnormal",
+    "blood circulation, abnormal",
+    "blood vessel morphology, abnormal",
+    # Eye / pigmentation
+    "eye morphology, abnormal",
+    "pigmentation, abnormal",
+    # Whole-organism
+    "body size, abnormal",
+    "development, delayed",
+    "embryonic lethal",
+    # Swim-bladder + locomotion (zebrafish-specific)
+    "swim bladder morphology, abnormal",
+    "swimming behavior, abnormal",
+)
+
+
+# GO (Gene Ontology) candidates: high-frequency biological processes and
+# molecular functions cited across the corpus. The three GO roots
+# (molecular_function, cellular_component, biological_process) already
+# ship in the static concept_index.tsv; we add the concrete terms here
+# so claims like "WNT4 enriched_for Wnt signaling pathway" can resolve.
+# Mix of process / function / pathway terms; ~50 entries to keep
+# benchmark recall up on feature-level qualifiers.
+GO_CANDIDATES: tuple[str, ...] = (
+    # --- Cell cycle / proliferation / death --------------------------------
+    "cell cycle", "mitotic cell cycle", "cell division", "DNA replication",
+    "DNA repair", "apoptotic process", "programmed cell death",
+    "autophagy", "cellular senescence",
+    # --- Gene expression machinery -----------------------------------------
+    "gene expression", "transcription, DNA-templated",
+    "translation", "mRNA splicing, via spliceosome",
+    "RNA processing", "rRNA processing",
+    "regulation of transcription, DNA-templated",
+    # --- Protein lifecycle -------------------------------------------------
+    "protein folding", "protein phosphorylation",
+    "ubiquitin-dependent protein catabolic process", "proteolysis",
+    # --- Signal transduction (most common in transcriptomics) -------------
+    "signal transduction", "Wnt signaling pathway",
+    "MAPK cascade", "Notch signaling pathway",
+    "transforming growth factor beta receptor signaling pathway",
+    "BMP signaling pathway", "Hippo signaling pathway",
+    "JAK-STAT cascade", "Hedgehog signaling pathway",
+    # --- Metabolism --------------------------------------------------------
+    "glycolytic process", "oxidative phosphorylation",
+    "fatty acid biosynthetic process", "gluconeogenesis",
+    "cellular respiration", "ATP biosynthetic process",
+    # --- Immune / stress response -----------------------------------------
+    "immune response", "innate immune response",
+    "adaptive immune response", "inflammatory response",
+    "response to oxidative stress", "cellular response to hypoxia",
+    "cellular response to DNA damage stimulus",
+    # --- Development / differentiation / morphogenesis --------------------
+    "cell differentiation", "embryonic development",
+    "neurogenesis", "gastrulation", "angiogenesis",
+    "epithelial to mesenchymal transition",
+    "wound healing", "regeneration",
+    # --- Cell behaviour ---------------------------------------------------
+    "cell migration", "cell adhesion",
+    "cell proliferation",
+    # --- Molecular function (top picks) -----------------------------------
+    "DNA binding", "RNA binding", "protein binding",
+    "kinase activity", "protein kinase activity",
+    "ATP binding", "transcription factor activity",
+)
+
+
 REGISTRY: tuple[OntologyConfig, ...] = (
     # --- v0.8.0, Top-7 absolute priority -----------------------------------
     OntologyConfig(
@@ -552,16 +631,29 @@ REGISTRY: tuple[OntologyConfig, ...] = (
         out_filename="emapa_concept_index.tsv",
         candidates=EMAPA_CANDIDATES,
     ),
-    # ZP deferred to v0.9.x, labels follow a peculiar
-    # "<entity> abnormal, abnormal" pattern that doesn't match
-    # the natural-language "abnormal <entity>" form our candidates
-    # use. 1 / 16 hits in the first harvest. Refining the candidate
-    # list to flip word order is fragile; better to revisit with a
-    # dedicated ZP-pattern-aware harvester later.
-    # OntologyConfig(ols_id="zp", ontology_label="ZP",
-    #                axis="zebrafish_phenotype",
-    #                out_filename="zp_concept_index.tsv",
-    #                candidates=ZP_CANDIDATES),
+    # --- v0.12 expansion: ZP (zebrafish phenotype) re-tried ---------------
+    # The v0.9.0 attempt failed because the candidates were written as
+    # natural English (``abnormal <entity>``) while ZP's canonical labels
+    # follow ``<entity> <quality>, abnormal``. The v0.12 candidate list
+    # is rewritten in the canonical form so the exact-label cascade
+    # catches it. RXNO and HCAO remain deferred for the reasons
+    # documented in v0.9.0 (CHEBI/CL re-publishers with low effective
+    # transcripto yield).
+    OntologyConfig(
+        ols_id="zp",    ontology_label="ZP",    axis="zebrafish_phenotype",
+        out_filename="zp_concept_index.tsv",
+        candidates=ZP_CANDIDATES,
+    ),
+    # --- v0.12 expansion: GO (biological process + molecular function) ----
+    # The static concept_index.tsv already ships the three GO roots; this
+    # entry adds ~50 high-frequency concrete process / function terms so
+    # feature-level claims (Wnt signaling pathway, apoptotic process,
+    # ATP binding, ...) get a real GO CURIE.
+    OntologyConfig(
+        ols_id="go",    ontology_label="GO",    axis="biological_process",
+        out_filename="go_concept_index.tsv",
+        candidates=GO_CANDIDATES,
+    ),
     OntologyConfig(
         ols_id="xpo",   ontology_label="XPO",    axis="xenopus_phenotype",
         out_filename="xpo_concept_index.tsv",

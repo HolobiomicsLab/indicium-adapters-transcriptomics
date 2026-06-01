@@ -115,6 +115,55 @@ CANDIDATES: tuple[Candidate, ...] = (
     Candidate("chondrocyte",                "Tabula Muris/Sapiens"),
     Candidate("osteocyte",                  "Tabula Muris/Sapiens"),
     Candidate("stem cell",                  "Tabula Muris/Sapiens stemness"),
+
+    # --- v0.12 expansion: T/B cell subtypes (Tirosh 2016 + Tabula Sapiens) -
+    Candidate("regulatory T cell",          "Tirosh 2016, Tabula Sapiens immune"),
+    Candidate("CD4-positive, alpha-beta T cell", "Tabula Sapiens immune"),
+    Candidate("CD8-positive, alpha-beta T cell", "Tabula Sapiens immune"),
+    Candidate("naive T cell",               "Tabula Sapiens immune"),
+    Candidate("memory T cell",              "Tabula Sapiens immune"),
+    Candidate("effector T cell",            "Tabula Sapiens immune"),
+    Candidate("naive B cell",               "Tabula Sapiens immune"),
+    Candidate("memory B cell",              "Tabula Sapiens immune"),
+    Candidate("plasmablast",                "Tabula Sapiens immune"),
+
+    # --- v0.12 expansion: macrophage subtypes + vascular (Tabula Muris/Sapiens) -
+    Candidate("alveolar macrophage",        "Tabula Muris lung"),
+    Candidate("Kupffer cell",               "Tabula Muris liver"),
+    Candidate("pericyte",                   "Tabula Muris/Sapiens vasculature"),
+
+    # --- v0.12 expansion: lung epithelium (Tabula Muris/Sapiens lung) ------
+    Candidate("type I pneumocyte",          "Tabula Muris/Sapiens lung"),
+    Candidate("type II pneumocyte",         "Tabula Muris/Sapiens lung"),
+    Candidate("ciliated cell",              "Tabula Muris/Sapiens airway"),
+    Candidate("basal cell",                 "Tabula Muris/Sapiens airway"),
+
+    # --- v0.12 expansion: pancreas (Tabula Muris/Sapiens) -----------------
+    Candidate("pancreatic A cell",          "Tabula Muris/Sapiens pancreas (glucagon)"),
+    Candidate("pancreatic B cell",          "Tabula Muris/Sapiens pancreas (insulin)"),
+    Candidate("pancreatic D cell",          "Tabula Muris/Sapiens pancreas (somatostatin)"),
+    Candidate("pancreatic acinar cell",     "Tabula Muris/Sapiens pancreas exocrine"),
+    Candidate("pancreatic ductal cell",     "Tabula Muris/Sapiens pancreas exocrine"),
+
+    # --- v0.12 expansion: kidney + skin + bone (Tabula Muris/Sapiens) -----
+    Candidate("podocyte",                   "Tabula Muris/Sapiens kidney"),
+    Candidate("melanocyte",                 "Tirosh 2016 melanoma + Tabula Sapiens skin"),
+    Candidate("keratinocyte",               "Tabula Sapiens skin"),
+    Candidate("osteoblast",                 "Tabula Muris/Sapiens bone"),
+    Candidate("osteoclast",                 "Tabula Muris/Sapiens bone"),
+
+    # --- v0.12 expansion: neuronal subtypes (Brunet Avalos, Packer, Wagner) -
+    Candidate("GABAergic neuron",           "scRNA brain studies"),
+    Candidate("glutamatergic neuron",       "scRNA brain studies"),
+    Candidate("dopaminergic neuron",        "scRNA brain studies"),
+    Candidate("motor neuron",               "scRNA brain + neuromuscular"),
+    Candidate("Purkinje cell",              "scRNA cerebellum"),
+
+    # --- v0.12 expansion: stem cell types (Tabula Muris + atlases) --------
+    Candidate("hematopoietic stem cell",    "Tabula Muris bone marrow"),
+    Candidate("embryonic stem cell",        "developmental scRNA studies"),
+    Candidate("mesenchymal stem cell",      "Tabula Muris/Sapiens"),
+    Candidate("neural stem cell",           "Wagner 2018 zebrafish embryo"),
 )
 
 
