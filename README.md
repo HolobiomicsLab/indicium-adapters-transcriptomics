@@ -26,19 +26,21 @@ The two qualifier sets are disjoint by construction (enforced by `tests/test_com
 
 **Repository accessions** for GEO, SRA, ENA, ArrayExpress, ENCODE, BioProject, dbGaP, BioStudies.
 
-**Anatomy** via a small hand-curated UBERON index, verified at build time with strict label match (no hyponym promotion). Cnidarian-specific terms (*physa*, *mesoglea*, *gastrodermis*) are documented as triaged out because UBERON has no entry for them.
+**Anatomy** via a multi-species index of 152 entries: UBERON (35 species-agnostic terms covering nervous / digestive / respiratory / circulatory / urogenital / endocrine / lymphoid / musculoskeletal systems) plus the organism-paired ontologies FBbt (34 Drosophila), WBbt (21 C. elegans), ZFA (34 zebrafish), EMAPA (28 mouse developmental). Lookup is species-aware: a `species` hint on the claim routes to the organism-specific ontology when available, with UBERON winning by default. Cnidarian-specific terms (*physa*, *mesoglea*, *gastrodermis*) are documented as triaged out because UBERON has no entry for them.
 
-**Concepts** from 19 ontology sources merged into a single index of ~447 verified CURIEs:
+**Concepts** from 21 ontology sources merged into a single index of ~547 verified CURIEs:
 
 | Layer | Sources |
 |---|---|
-| TranscriptoKG modelling vocabulary | INO, NCIT, GO, OBI, STATO |
-| Tool registry | bio.tools (STAR, DESeq2, Seurat, minimap2, ...) |
+| TranscriptoKG modelling vocabulary | INO, NCIT, GO (3 roots), OBI, STATO |
+| Tool registry | bio.tools (STAR, DESeq2, Seurat, minimap2, StringTie, ...) |
 | OLS4 corpus harvest | platforms (Illumina, NovaSeq, ...), protocols (Smart-seq2, Visium, ...), stats (Wilcoxon, Benjamini-Hochberg) |
-| Cell types | CL (cnidocyte, T cell, hepatocyte, ...) |
+| Cell types | CL (cnidocyte, T cell / B cell subtypes, alveolar macrophage, Kupffer cell, pancreatic A/B/D, podocyte, keratinocyte, melanocyte, neuronal subtypes, stem cells, ... 65 entries) |
 | Top-7 OLS4 audit picks | ChEBI, HP, MP, DOID, PR, OBA, ENVO |
 | Universal Tier-1 | MS (mass spec), UO (units), MOD (PTMs) |
 | Organism-paired Tier-2 | FBbt, WBbt, ZFA, EMAPA, XPO |
+| GO biological process / molecular function | ~56 concrete terms (Wnt / MAPK / BMP / Hippo signalling, apoptotic process, cell cycle, DNA repair, gene expression, oxidative phosphorylation, immune response, regeneration, ATP binding, kinase activity, ...) |
+| ZP zebrafish phenotype | swim bladder / neural tube / notochord / fin / heart / circulation morphology phenotypes (canonical "<entity> <quality>, abnormal" form) |
 
 The load order encodes a priority ladder (paper-modelling vocab > OLS4 corpus > bio.tools > single-ontology indexes), so a hypothetical term collision resolves to the most grounded source.
 
@@ -113,7 +115,7 @@ enriched = bulk.enrich_claim({
 #     "nvertx": "NvERTx.4.55830", "uniprot": "Q805B2",
 # }
 
-# 4) Single-cell anatomy -> UBERON CURIE
+# 4) Single-cell anatomy -> UBERON or organism-specific CURIE
 enriched = sc.enrich_claim({
     "subject": "MMP9",
     "qualifier": "localized_in_tissue",
@@ -121,10 +123,22 @@ enriched = sc.enrich_claim({
 })
 # enriched["ontology_terms"]["object"] == "UBERON:0002095"
 # enriched["xrefs"]["object"] == {
-#     "uberon": "UBERON:0002095",
+#     "curie": "UBERON:0002095",
 #     "label": "mesentery",
+#     "ontology": "UBERON",
 #     "description": "Anatomical organ component composed of a double layer ...",
 # }
+
+# 4b) Species hint routes organism-specific anatomy to the right ontology
+enriched = sc.enrich_claim({
+    "subject": "dpp",
+    "qualifier": "localized_in_tissue",
+    "object": "wing disc",
+    "species": "drosophila",
+})
+# enriched["ontology_terms"]["object"] == "FBbt:00001778"
+# enriched["xrefs"]["object"]["ontology"] == "FBbt"
+# enriched["xrefs"]["object"]["species"]  == "drosophila"
 
 # 5) Analysis-concept term -> NCIT / INO / OBI / GO / STATO CURIE
 enriched = bulk.enrich_claim({

@@ -13,5 +13,21 @@ venv/
 
 # Mini-corpus PDFs are copyrighted (Cell, Nature, Science, BMC, Nat Methods,
 # Nat Biotech) and stay out of git. The extraction script and the derived
-# vocabulary JSONs under articles/ are tracked.
+# vocabulary JSONs under articles/ are tracked. The recursive pattern also
+# covers articles/heldout/*.pdf (papers retrieved via UniCA institutional
+# access for held-out benchmark work).
 articles/*.pdf
+articles/**/*.pdf
+
+# Benchmark scaffolding kept local until the ASB evaluation methodology
+# stabilises upstream (eval repo from Louis-Felix, post-architecture
+# review). Once the convention is fixed, the relevant pieces will move
+# under docs/ or be re-committed in their final form.
+BENCHMARK_PLAN.md
+CORPUS.md
+benchmark/
+
+# Draft GitHub issues composed locally before posting. The repo is not
+# meant to ship discussion artefacts; once an issue is posted on
+# github.com, the local draft is deleted (or stays gitignored).
+GITHUB_ISSUE_*.md
