@@ -363,3 +363,127 @@ def test_shacl_shapes_returns_a_parsed_graph():
     g = SingleCellTranscriptomicsAdapter().shacl_shapes()
     assert isinstance(g, rdflib.Graph)
     assert len(g) > 0
+
+
+# --- A-convention: ontology_term_justifications (semapv) --------------------
+
+
+def test_singlecell_justification_present_whenever_ontology_terms_set():
+    """A-convention: every slot that gets an ontology_terms entry must also
+    get a companion ontology_term_justifications entry with a semapv: CURIE.
+    Test across all three resolver types: gene, anatomy, concept."""
+    a = SingleCellTranscriptomicsAdapter()
+    claims = [
+        # gene resolver
+        {"subject": "WNT4", "qualifier": "marker_of_cell_type", "object": "cnidocyte"},
+        # anatomy resolver
+        {"subject": "x", "qualifier": "localized_in_tissue", "object": "mesentery"},
+        # both slots resolved (gene + anatomy)
+        {"subject": "MMP9", "qualifier": "localized_in_tissue", "object": "mesentery"},
+    ]
+    for claim in claims:
+        out = a.enrich_claim(claim)
+        ot = out.get("ontology_terms", {})
+        otj = out.get("ontology_term_justifications", {})
+        for slot, curie in ot.items():
+            assert slot in otj, (
+                f"claim {claim!r}: ontology_terms[{slot!r}]={curie!r} "
+                f"but ontology_term_justifications[{slot!r}] is absent"
+            )
+            assert otj[slot].startswith("semapv:"), (
+                f"claim {claim!r}: justification for {slot!r} must start "
+                f"with 'semapv:', got {otj[slot]!r}"
+            )
+
+
+def test_singlecell_gene_resolution_justification_is_composite_matching():
+    """Gene-symbol (index/registry) resolution → semapv:CompositeMatching."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "marker_of_cell_type",
+        "object": "cnidocyte",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+    assert out["ontology_term_justifications"]["subject"] == "semapv:CompositeMatching"
+
+
+def test_singlecell_anatomy_resolution_justification_is_lexical_matching():
+    """Anatomy (UBERON label string) resolution is lexical → semapv:LexicalMatching."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "x",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
+    })
+    assert out["ontology_terms"]["object"] == "UBERON:0002095"
+    assert out["ontology_term_justifications"]["object"] == "semapv:LexicalMatching"
+
+
+def test_singlecell_concept_resolution_justification_is_lexical_matching():
+    """Concept (OLS4/bio.tools name) resolution is lexical → semapv:LexicalMatching."""
+    from indicium_adapters_transcriptomics import _enrichment, singlecell
+
+    fake_row = {
+        "term": "rna-seq",
+        "curie": "OBI:0001177",
+        "label": "RNA-seq assay",
+        "description": "An assay that sequences expressed RNA.",
+        "ontology": "OBI",
+        "source": "monkeypatch fixture",
+    }
+    import pytest  # noqa: F401 — imported here for monkeypatch use in non-fixture context
+
+    # We can't monkeypatch here without fixture — use the real index's CL term instead.
+    # cnidocyte is in the real CL concept index, so use the object slot
+    # (gene wins on subject; concept fires on object via CL).
+    a = singlecell.SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "marker_of_cell_type",
+        "object": "cnidocyte",
+    })
+    # object resolves via concept (CL) → LexicalMatching
+    assert out["ontology_terms"]["object"] == "CL:0011029"
+    assert out["ontology_term_justifications"]["object"] == "semapv:LexicalMatching"
+
+
+def test_singlecell_no_justification_when_no_ontology_terms():
+    """When a claim does not resolve, neither ontology_terms nor
+    ontology_term_justifications should be present."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "completely-bogus-zzz",
+        "qualifier": "localized_in_tissue",
+        "object": "another-bogus-qqq",
+    })
+    assert "ontology_terms" not in out
+    assert "ontology_term_justifications" not in out
+
+
+def test_singlecell_justification_purity_input_not_mutated():
+    """enrich_claim must remain pure: the ontology_term_justifications
+    addition must NOT mutate the input claim dict."""
+    a = SingleCellTranscriptomicsAdapter()
+    original = {"subject": "MMP9", "qualifier": "localized_in_tissue", "object": "mesentery"}
+    snapshot = dict(original)
+    out = a.enrich_claim(original)
+    assert original == snapshot
+    assert "ontology_term_justifications" in out
+    assert "ontology_term_justifications" not in original
+
+
+def test_singlecell_justification_purity_existing_nested_dict_not_mutated():
+    """When the input claim already has an ontology_term_justifications dict,
+    enrich_claim must not modify the caller's copy."""
+    a = SingleCellTranscriptomicsAdapter()
+    prior_justifications = {"object": "semapv:ManualMappingCuration"}
+    original = {
+        "subject": "MMP9",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
+        "ontology_term_justifications": prior_justifications,
+    }
+    snapshot = dict(prior_justifications)
+    a.enrich_claim(original)
+    assert prior_justifications == snapshot

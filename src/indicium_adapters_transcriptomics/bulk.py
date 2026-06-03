@@ -212,6 +212,8 @@ class BulkTranscriptomicsAdapter:
         claim = dict(claim)
         if "ontology_terms" in claim:
             claim["ontology_terms"] = dict(claim["ontology_terms"])
+        if "ontology_term_justifications" in claim:
+            claim["ontology_term_justifications"] = dict(claim["ontology_term_justifications"])
         if "xrefs" in claim:
             claim["xrefs"] = dict(claim["xrefs"])
 
@@ -234,6 +236,11 @@ class BulkTranscriptomicsAdapter:
                     continue
                 curie, xrefs = result
                 claim.setdefault("ontology_terms", {})[slot] = curie
+                claim.setdefault("ontology_term_justifications", {})[slot] = (
+                    "semapv:LexicalMatching"
+                    if resolver_name == "concept"
+                    else "semapv:CompositeMatching"
+                )
                 if xrefs:
                     claim.setdefault("xrefs", {})[slot] = xrefs
                 break  # First hit per slot wins.

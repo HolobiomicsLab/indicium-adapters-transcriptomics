@@ -1052,3 +1052,113 @@ def test_shacl_shapes_returns_a_parsed_graph():
     g = a.shacl_shapes()
     assert isinstance(g, rdflib.Graph)
     assert len(g) > 0
+
+
+# --- A-convention: ontology_term_justifications (semapv) --------------------
+
+
+def test_bulk_justification_present_whenever_ontology_terms_set():
+    """A-convention: every slot that gets an ontology_terms entry must also
+    get a companion ontology_term_justifications entry with a semapv: CURIE.
+    Test across all three resolver types: accession, gene, concept."""
+    a = BulkTranscriptomicsAdapter()
+    claims = [
+        # accession resolver
+        {"subject": "GSE168938", "qualifier": "consolidates_dataset", "object": "paper"},
+        # gene resolver (default priority, feature qualifier)
+        {"subject": "WNT4", "qualifier": "expressed_in", "object": "tissue"},
+        # concept resolver (study-level qualifier — concept runs first)
+        {"subject": "study_42", "qualifier": "sequenced_on", "object": "Illumina"},
+        # both slots resolved
+        {"subject": "WNT4", "qualifier": "expressed_in", "object": "MAPK1"},
+    ]
+    for claim in claims:
+        out = a.enrich_claim(claim)
+        ot = out.get("ontology_terms", {})
+        otj = out.get("ontology_term_justifications", {})
+        for slot, curie in ot.items():
+            assert slot in otj, (
+                f"claim {claim!r}: ontology_terms[{slot!r}]={curie!r} "
+                f"but ontology_term_justifications[{slot!r}] is absent"
+            )
+            assert otj[slot].startswith("semapv:"), (
+                f"claim {claim!r}: justification for {slot!r} must start "
+                f"with 'semapv:', got {otj[slot]!r}"
+            )
+
+
+def test_bulk_gene_resolution_justification_is_composite_matching():
+    """Gene-symbol resolution is an index/registry lookup → semapv:CompositeMatching."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "expressed_in",
+        "object": "tissue",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+    assert out["ontology_term_justifications"]["subject"] == "semapv:CompositeMatching"
+
+
+def test_bulk_accession_resolution_justification_is_composite_matching():
+    """Repository-accession resolution is an identifier-index lookup → semapv:CompositeMatching."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "GSE168938",
+        "qualifier": "consolidates_dataset",
+        "object": "paper",
+    })
+    assert out["ontology_terms"]["subject"] == "GEO:GSE168938"
+    assert out["ontology_term_justifications"]["subject"] == "semapv:CompositeMatching"
+
+
+def test_bulk_concept_resolution_justification_is_lexical_matching():
+    """Concept (bio.tools / OLS4) resolution is name/string matching → semapv:LexicalMatching."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "study_42",
+        "qualifier": "sequenced_on",
+        "object": "Illumina",
+    })
+    assert out["ontology_terms"]["object"] == "NCIT:C215820"
+    assert out["ontology_term_justifications"]["object"] == "semapv:LexicalMatching"
+
+
+def test_bulk_no_justification_when_no_ontology_terms():
+    """When a claim does not resolve, neither ontology_terms nor
+    ontology_term_justifications should be present."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "completely-bogus-zzz",
+        "qualifier": "expressed_in",
+        "object": "another-bogus-qqq",
+    })
+    assert "ontology_terms" not in out
+    assert "ontology_term_justifications" not in out
+
+
+def test_bulk_justification_purity_input_not_mutated():
+    """enrich_claim must remain pure: the ontology_term_justifications
+    addition must NOT mutate the input claim dict."""
+    a = BulkTranscriptomicsAdapter()
+    original = {"subject": "WNT4", "qualifier": "expressed_in", "object": "tissue"}
+    snapshot = dict(original)
+    out = a.enrich_claim(original)
+    assert original == snapshot
+    assert "ontology_term_justifications" in out  # enrichment did happen
+    assert "ontology_term_justifications" not in original
+
+
+def test_bulk_justification_purity_existing_nested_dict_not_mutated():
+    """When the input claim already has an ontology_term_justifications dict,
+    enrich_claim must not modify the caller's copy."""
+    a = BulkTranscriptomicsAdapter()
+    prior_justifications = {"subject": "semapv:ManualMappingCuration"}
+    original = {
+        "subject": "WNT4",
+        "qualifier": "expressed_in",
+        "object": "tissue",
+        "ontology_term_justifications": prior_justifications,
+    }
+    snapshot = dict(prior_justifications)
+    a.enrich_claim(original)
+    assert prior_justifications == snapshot
