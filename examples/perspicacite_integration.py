@@ -160,6 +160,82 @@ WARNER_SYNTHETIC_CLAIMS = [
         "quote": "Libraries were sequenced on an Illumina NovaSeq 6000",
         "source_doi": "10.1242/dev.196782",
     },
+    # --- v0.13 spec alignment (indicium-adapters #1) ---------------------
+    # The next four claims exercise the qualifiers added to align with
+    # the indicium-adapters #1 spec. Each one tests a different facet:
+    # the signed direction-of-regulation forms, the spec-canonical
+    # ``marker_for``, and the pathway-specific ``enriched_in_pathway``
+    # with a Reactome / KEGG / WP object.
+
+    # 8) Signed up-regulation: ``upregulated_in`` should route through
+    #    the default priority and resolve WNT4 to HGNC:12783, same as
+    #    the generic ``differentially_expressed_in``. The extraction
+    #    context now tells the LLM to prefer the signed form when the
+    #    log2FC sign is known; this synthetic claim emulates that.
+    {
+        "context": "regenerating oral pole (log2FC > 0)",
+        "subject": "WNT4",
+        "qualifier": "upregulated_in",
+        "relation": "is upregulated in",
+        "object": "regenerating_oral_pole",
+        "claim_type": "explicit",
+        "evidence_type": "data",
+        "source_type": "text",
+        "quote": "WNT4 was significantly upregulated in the regenerating oral pole (log2FC=+2.3)",
+        "source_doi": "10.1242/dev.196782",
+    },
+    # 9) Signed down-regulation: same dispatch path as upregulated_in,
+    #    different signed form. Useful to confirm both directions route
+    #    identically through enrich_claim without one shadowing the
+    #    other.
+    {
+        "context": "regenerating oral pole (log2FC < 0)",
+        "subject": "MMP9",
+        "qualifier": "downregulated_in",
+        "relation": "is downregulated in",
+        "object": "regenerating_oral_pole",
+        "claim_type": "explicit",
+        "evidence_type": "data",
+        "source_type": "text",
+        "quote": "MMP9 was significantly downregulated in the regenerating oral pole (log2FC=-1.8)",
+        "source_doi": "10.1242/dev.196782",
+    },
+    # 10) Spec-canonical ``marker_for``: gene-marker assertion. Default
+    #     priority should still resolve the subject gene to HGNC. The
+    #     legacy ``marker_of`` is also kept in the qualifier set for
+    #     backward compatibility but new claims should prefer this one.
+    {
+        "context": "Nematostella cnidocyte marker",
+        "subject": "MMP9",
+        "qualifier": "marker_for",
+        "relation": "is a marker for",
+        "object": "cnidocyte",
+        "claim_type": "explicit",
+        "evidence_type": "data",
+        "source_type": "text",
+        "quote": "MMP9 was identified as a marker for cnidocyte differentiation",
+        "source_doi": "10.1242/dev.196782",
+    },
+    # 11) Pathway-specific enrichment: bare Reactome identifier in the
+    #     object slot. The accession-pattern path added in v0.13 should
+    #     lift ``R-HSA-9012999`` to ``REACTOME:R-HSA-9012999`` without
+    #     the LLM having to pre-prefix. This is the headline end-to-end
+    #     behaviour the spec asks for.
+    {
+        "context": "Wnt pathway enrichment in regenerating polyps",
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "relation": "is enriched in",
+        "object": "R-HSA-9012999",
+        "claim_type": "explicit",
+        "evidence_type": "data",
+        "source_type": "text",
+        "quote": (
+            "Target genes were significantly enriched in the canonical "
+            "Wnt signaling pathway (R-HSA-9012999)"
+        ),
+        "source_doi": "10.1242/dev.196782",
+    },
 ]
 
 
@@ -199,7 +275,7 @@ async def run() -> int:
     n_coerced = len(claims)
     print(f"\nInput synthetic claims: {n_input}")
     print(f"After Perspicacite coercion + adapter enrichment: {n_coerced}")
-    print(f"Dropped: {n_input - n_coerced} (expected: 1, the frobnicates entry)")
+    print(f"Dropped: {n_input - n_coerced} (expected: 1, the frobnicates out-of-vocab entry)")
 
     # Verify the prompt actually contained the adapter's extraction_context.
     prompt_sent = llm.complete.call_args[1]["messages"][0]["content"]
@@ -276,6 +352,34 @@ async def run() -> int:
         ok = star_curie == expected
         print(f"  aligned_with STAR -> {star_curie!r} (expected {expected!r}): "
               f"{'OK' if ok else 'WRONG'}")
+
+    # v0.13 spec-alignment verifications: each of the four new qualifiers
+    # must route through enrich_claim to the same CURIE shape its design
+    # promises. The integration test catches regressions where Perspicacite
+    # coercion drops or rewrites a v0.13 qualifier before the adapter sees it.
+    print()
+    print("Targeted verification (v0.13 spec-aligned qualifiers):")
+    v013_checks = [
+        ("upregulated_in",     "subject", "WNT4",          "HGNC:12783"),
+        ("downregulated_in",   "subject", "MMP9",          "HGNC:7176"),
+        ("marker_for",         "subject", "MMP9",          "HGNC:7176"),
+        ("enriched_in_pathway", "object", "R-HSA-9012999", "REACTOME:R-HSA-9012999"),
+    ]
+    for qualifier, slot, raw, expected_curie in v013_checks:
+        match = next(
+            (c for c in claims
+             if c.get("qualifier") == qualifier and c.get(slot) == raw),
+            None,
+        )
+        if match is None:
+            print(f"  {qualifier}: claim NOT FOUND post-coercion (Perspicacite dropped it)")
+            continue
+        actual = (match.get("ontology_terms") or {}).get(slot, "")
+        ok = actual == expected_curie
+        print(
+            f"  {qualifier:22s} {slot}={raw!r:<18s} -> {actual!r} "
+            f"(expected {expected_curie!r}): {'OK' if ok else 'WRONG'}"
+        )
 
     # Try SHACL validation if indicium is importable.
     print()

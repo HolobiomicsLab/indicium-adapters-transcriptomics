@@ -214,7 +214,7 @@ wheels = [
 
 [[package]]
 name = "indicium"
-version = "1.11.0"
+version = "1.8.0"
 source = { editable = "../indicium" }
 dependencies = [
     { name = "pyshacl" },
@@ -268,7 +268,7 @@ provides-extras = ["dev", "asb"]
 
 [[package]]
 name = "indicium-adapters-transcriptomics"
-version = "0.11.0"
+version = "0.13.0"
 source = { editable = "." }
 dependencies = [
     { name = "indicium" },
