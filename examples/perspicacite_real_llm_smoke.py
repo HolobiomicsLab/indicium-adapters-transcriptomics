@@ -267,6 +267,20 @@ async def run() -> int:
                         f"  {slot:7s} expected {expected!r}, "
                         f"got {actual!r}: {'OK' if match else 'WRONG'}"
                     )
+            # v0.14: confirm SSSOMMapping emission. Each resolved slot
+            # should have an entry in sssom_mappings shaped like indicium's
+            # SSSOMMapping pydantic class. We just print the count and one
+            # fragment so future runs see the contract at a glance.
+            sssom = target_claim.get("sssom_mappings") or {}
+            print(f"  sssom: {len(sssom)} fragment(s) emitted")
+            if sssom:
+                sample = next(iter(sssom.values()))
+                print(
+                    f"    sample: id={sample.get('id')!r}, "
+                    f"predicate={sample.get('predicate_id')!r}, "
+                    f"justification={sample.get('mapping_justification')!r}, "
+                    f"confidence={sample.get('confidence')}"
+                )
 
         results.append((p["label"], picked_qualifiers, spec_hit, "ok"))
         print()

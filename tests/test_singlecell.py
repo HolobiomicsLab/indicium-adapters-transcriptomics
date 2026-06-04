@@ -478,3 +478,52 @@ def test_singlecell_justification_purity_existing_nested_dict_not_mutated():
     snapshot = dict(prior_justifications)
     a.enrich_claim(original)
     assert prior_justifications == snapshot
+
+
+# --- SSSOMMapping + workflow_coupling (v0.14, indicium >= 1.11.0) ----------
+
+
+def test_singlecell_enrich_emits_sssom_for_anatomy_object():
+    """``localized_in_tissue: MMP9 mesentery`` should emit two SSSOMMapping
+    fragments — one for the gene subject and one for the anatomy object."""
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "localized_in_tissue",
+        "object": "mesentery",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    object_ids = {m["object_id"] for m in mappings.values()}
+    # The anatomy resolver fires on "mesentery" and resolves it to UBERON.
+    assert any(oid.startswith("UBERON:") for oid in object_ids), object_ids
+    # The gene resolver fires on "MMP9" first per the default priority
+    # so an HGNC fragment is also present.
+    assert "HGNC:7176" in object_ids
+
+
+def test_singlecell_sssom_fragments_round_trip_through_indicium():
+    from indicium.generated.model import SSSOMMapping
+    a = SingleCellTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "marker_of_cell_type",
+        "object": "cnidocyte",
+    })
+    for fragment in (out.get("sssom_mappings") or {}).values():
+        m = SSSOMMapping(**fragment)
+        assert m.subject_id == fragment["subject_id"]
+        assert m.object_id == fragment["object_id"]
+
+
+def test_singlecell_default_workflow_coupling_is_loose():
+    assert SingleCellTranscriptomicsAdapter.default_workflow_coupling == "loose"
+
+
+def test_singlecell_workflow_coupling_value_in_indicium_enum():
+    from indicium.generated.model import Evidence, WorkflowCoupling
+    valid = {e.value for e in WorkflowCoupling}
+    assert SingleCellTranscriptomicsAdapter.default_workflow_coupling in valid
+    ev = Evidence(
+        workflow_coupling=SingleCellTranscriptomicsAdapter.default_workflow_coupling
+    )
+    assert ev.workflow_coupling == WorkflowCoupling.loose

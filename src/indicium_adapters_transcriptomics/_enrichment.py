@@ -15,6 +15,12 @@ resolver name to function.
 The indexes are loaded once at import time from bundled TSV resources under
 ``data/``. Maintainer scripts under ``data/build_*.py`` regenerate those TSVs
 from public sources (HGNC, MGI, OLS4, bio.tools, etc.).
+
+This module also exposes ``build_sssom_mapping``, the helper both adapters
+use to lift each resolver hit to a first-class SSSOMMapping fragment
+(indicium >= 1.11.0). The fragment is a plain dict matching SSSOMMapping's
+constructor fields so downstream Perspicacite can fold it directly into
+``IndiciumDocument.sssom_mappings`` without round-tripping through pydantic.
 """
 from __future__ import annotations
 
@@ -22,6 +28,96 @@ import csv
 import re
 from importlib.resources import files
 from typing import Final
+
+# Per-resolver confidence floor for emitted SSSOMMapping nodes. Tighter
+# resolvers (regex-anchored accession; exact gene-symbol lookup) get higher
+# scores; heuristic fallbacks (embedded-pathway substring scan; concept
+# trim-tail) get lower scores so downstream consumers can filter on
+# ``confidence >= X`` to drop the soft matches if they prefer.
+#
+# These are FLOORS, not point estimates. The values are intentionally
+# conservative — a future refinement can refine per-row (e.g. drop confidence
+# when the gene-symbol lookup needed a species-hint disambiguation), but for
+# v0.14 the kind-level granularity matches what the resolvers already report
+# via ``ontology_term_justifications``.
+_SSSOM_CONFIDENCE_BY_KIND: Final[dict[str, float]] = {
+    "accession":         0.99,  # regex-anchored, near-perfect when matched
+    "gene":              0.95,
+    "anatomy":           0.95,
+    "concept":           0.90,
+    "embedded_pathway":  0.85,  # substring fallback, less anchored
+    "trimmed_concept":   0.80,  # heuristic trim-tail fallback
+}
+
+
+def _slug_for_sssom_subject(text: str) -> str:
+    """Sanitize a free-text mention into a URL-safe SSSOM subject suffix.
+
+    Lowercase, replace runs of non-alphanumeric with a single underscore,
+    strip leading / trailing underscores. Stable across runs so the same
+    raw mention produces the same SSSOMMapping id, enabling dedup at the
+    document level.
+
+    >>> _slug_for_sssom_subject("WNT4")
+    'wnt4'
+    >>> _slug_for_sssom_subject("Illumina NovaSeq 6000")
+    'illumina_novaseq_6000'
+    >>> _slug_for_sssom_subject("R-HSA-9012999")
+    'r_hsa_9012999'
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
+    return slug or "unknown"
+
+
+def build_sssom_mapping(
+    *,
+    raw_text: str,
+    object_curie: str,
+    object_label: str | None,
+    justification: str,
+    resolver_kind: str,
+) -> dict:
+    """Build an SSSOMMapping fragment for one resolver hit.
+
+    Returns a dict shaped like the indicium ``SSSOMMapping`` pydantic
+    constructor's keyword arguments, with no fields populated beyond what
+    a single lexical / composite match can know. The caller (an adapter
+    ``enrich_claim``) accumulates these fragments in
+    ``claim["sssom_mappings"]`` and downstream Perspicacite stages fold
+    them into ``IndiciumDocument.sssom_mappings``.
+
+    * ``raw_text``      - the free-text mention from the LLM extractor.
+    * ``object_curie``  - the resolved CURIE.
+    * ``object_label``  - canonical label of the resolved term, if known
+      (None for accession resolutions, present for concept / anatomy /
+      most gene rows).
+    * ``justification`` - ``semapv:LexicalMatching`` or
+      ``semapv:CompositeMatching`` (passed through unchanged from the
+      resolver's justification report).
+    * ``resolver_kind`` - one of ``accession`` / ``gene`` / ``anatomy`` /
+      ``concept`` / ``embedded_pathway`` / ``trimmed_concept``; drives
+      the default confidence floor.
+
+    The fragment uses the synthetic ``asb.lex:`` namespace for
+    ``subject_id`` so that free-text mentions stay deduplicable across a
+    document without needing a pre-existing identifier registry. The
+    ``id`` field follows the ``{subject_id}--{object_id}`` convention
+    shipped in the indicium v1.11.0 test suite.
+    """
+    slug = _slug_for_sssom_subject(raw_text)
+    subject_id = f"asb.lex:{slug}"
+    fragment: dict = {
+        "id": f"{subject_id}--{object_curie}",
+        "subject_id": subject_id,
+        "subject_label": raw_text,
+        "predicate_id": "skos:closeMatch",
+        "object_id": object_curie,
+        "mapping_justification": justification,
+        "confidence": _SSSOM_CONFIDENCE_BY_KIND.get(resolver_kind, 0.5),
+    }
+    if object_label:
+        fragment["object_label"] = object_label
+    return fragment
 
 # Columns of ``data/gene_index.tsv``. Declared here so the loader can reject
 # a TSV whose header drifts. Add a column means updating this tuple AND the

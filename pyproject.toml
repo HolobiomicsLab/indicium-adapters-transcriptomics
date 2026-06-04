@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "indicium-adapters-transcriptomics"
-version = "0.13.0"
+version = "0.14.0"
 description = "Transcriptomics-domain DomainAdapters for the indicium ecosystem"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "indicium-adapters>=0.4.0",
-    "indicium>=1.4",
+    "indicium>=1.11",
     "rdflib>=7.0",
     "pyshacl>=0.25",
 ]

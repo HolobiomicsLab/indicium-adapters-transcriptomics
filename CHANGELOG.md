@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.14.0 — Full indicium-adapters #1 alignment: SSSOMMapping + workflow_coupling (2026-06-04)
+
+Closes the two remaining "Leverage current indicium features" items of [indicium-adapters #1](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) now that the upstream support shipped in `indicium` v1.11.0 (SSSOMMapping) and v1.10.0 (Evidence.workflow_coupling) on 2026-06-03. Additive: every claim shape from v0.13 still works; the new `sssom_mappings` field is emitted alongside the existing `ontology_terms` / `ontology_term_justifications` / `xrefs`.
+
+### SSSOMMapping emission (indicium >= 1.11.0)
+
+Every resolver hit in `enrich_claim()` now produces a first-class SSSOMMapping fragment in `claim["sssom_mappings"]` (a dict keyed by mapping id). Each fragment is shaped like `indicium.generated.model.SSSOMMapping`'s pydantic-constructor kwargs so Perspicacite can fold the entries straight into `IndiciumDocument.sssom_mappings` without round-tripping.
+
+Fragment fields populated by the helper `_enrichment.build_sssom_mapping`:
+
+| Field | Value | Notes |
+|---|---|---|
+| `id` | `"{subject_id}--{object_id}"` | Matches the convention from indicium's v1.11.0 test suite |
+| `subject_id` | `"asb.lex:{slug(raw_text)}"` | Synthetic namespace for free-text LLM mentions; stable across runs for dedup |
+| `subject_label` | the raw text | Carries the un-normalised mention |
+| `predicate_id` | `"skos:closeMatch"` | Single predicate for all our resolver outputs |
+| `object_id` | the resolved CURIE | Mirrors `ontology_terms[slot]` |
+| `object_label` | optional | Pulled from the resolver's `xrefs.label` when available |
+| `mapping_justification` | the SEMAPV string | Same value as `ontology_term_justifications[slot]` |
+| `confidence` | per-resolver floor | accession=0.99, gene/anatomy=0.95, concept=0.90, embedded_pathway=0.85, trimmed_concept=0.80 |
+
+Confidence floors are deliberately conservative — they let downstream consumers filter heuristic-fallback hits via `confidence >= 0.90` without losing the strict matches.
+
+### `default_workflow_coupling` advertisement (indicium >= 1.10.0)
+
+Both adapters now expose `default_workflow_coupling: str = "loose"` as a class attribute. Bulk RNA-seq pipelines (DESeq2 / edgeR / Salmon / STAR) and single-cell pipelines (CellRanger / STARsolo / Seurat / Scanpy) are file-based and individually reproducible per Suter et al. 2025 (DOI 10.1016/j.future.2025.107974), so the spec recommends `"loose"`. Perspicacite reads this attribute when constructing `Evidence` nodes for transcriptomics claims; runtime overrides remain possible.
+
+### indicium dependency bump
+
+`indicium >= 1.11.0` (was `indicium >= 1.4`). The bump unlocks the `SSSOMMapping` class and the `WorkflowCoupling` enum used by the new tests.
+
+### Tests
+
+12 new pinning tests across `test_bulk.py` and `test_singlecell.py`:
+
+* `test_enrich_claim_emits_sssom_mapping_for_gene_subject` — fragment shape on the gene-subject path
+* `test_enrich_claim_sssom_fragments_round_trip_through_indicium` — every fragment constructs through `SSSOMMapping(**fragment)`
+* `test_enrich_claim_emits_sssom_for_accession_object` — accession-object emits with the 0.99 floor
+* `test_enrich_claim_does_not_emit_sssom_when_no_resolution` — no emission on unresolved claims
+* `test_default_workflow_coupling_is_loose` (bulk + sc) — pin the class attribute
+* `test_workflow_coupling_value_is_in_indicium_enum` (bulk + sc) — round-trip through `Evidence(workflow_coupling=...)`
+* `test_singlecell_enrich_emits_sssom_for_anatomy_object` — multi-fragment emission on a localized-in-tissue claim
+* `test_singlecell_sssom_fragments_round_trip_through_indicium`
+
+### Real-LLM smoke verification
+
+`examples/perspicacite_real_llm_smoke.py` updated to also print the SSSOM fragments. Verified end-to-end with claude-sonnet-4-5: 5 fragments emitted across the 4 v0.13 smoke passages (signed-DE, marker, pathway), each with valid id / predicate / justification / confidence, all round-tripping through the pydantic constructor.
+
+
 ## v0.13.0 — indicium-adapters #1 spec alignment (2026-06-04)
 
 Additive alignment with the [indicium-adapters #1](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) contract. No breaking changes: every qualifier and CURIE prefix shipped before v0.13 still works exactly as it did. The deliberate divergence from the spec (two siblings `bulk-transcriptomics` + `single-cell-transcriptomics` instead of one `transcriptomics` adapter) is now documented in the README; rationale is the disjoint-qualifier structural invariant enforced by `tests/test_composition.py`.

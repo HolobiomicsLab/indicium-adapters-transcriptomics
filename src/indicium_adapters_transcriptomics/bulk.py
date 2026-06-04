@@ -20,7 +20,11 @@ from typing import Final
 
 import rdflib
 
-from indicium_adapters_transcriptomics._enrichment import resolve_concept, resolve_gene
+from indicium_adapters_transcriptomics._enrichment import (
+    build_sssom_mapping,
+    resolve_concept,
+    resolve_gene,
+)
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
 from indicium_adapters_transcriptomics._registries import (
     accession_to_curie,
@@ -140,10 +144,19 @@ class BulkTranscriptomicsAdapter:
     Single-cell qualifiers (cell-type markers, cluster enrichment, spatial
     localisation) belong in ``SingleCellTranscriptomicsAdapter`` so the two
     sibling adapters stay disjoint.
+
+    The ``default_workflow_coupling`` class attribute advertises the
+    Evidence.workflow_coupling value Perspicacite should set on Evidence
+    nodes derived from bulk-transcriptomics claims (indicium >= 1.10.0,
+    Suter et al. 2025). Bulk RNA-seq pipelines (DESeq2 / edgeR / Salmon /
+    STAR) are file-based and independently reproducible, so the spec
+    recommends ``"loose"``. Consumers that know better at runtime can
+    override.
     """
 
     domain_id = "bulk-transcriptomics"
     api_version = 1
+    default_workflow_coupling: str = "loose"
 
     # Every qualifier MUST match ``^[a-z][a-z0-9_]*$`` (snake_case).
     # Required by indicium >= 1.7.0: at serialisation time, Perspicacite
@@ -270,6 +283,8 @@ class BulkTranscriptomicsAdapter:
             claim["ontology_term_justifications"] = dict(claim["ontology_term_justifications"])
         if "xrefs" in claim:
             claim["xrefs"] = dict(claim["xrefs"])
+        if "sssom_mappings" in claim:
+            claim["sssom_mappings"] = dict(claim["sssom_mappings"])
 
         qualifier = (claim.get("qualifier") or "").strip()
         priority = _QUALIFIER_PRIORITY.get(qualifier, _DEFAULT_PRIORITY)
@@ -290,13 +305,29 @@ class BulkTranscriptomicsAdapter:
                     continue
                 curie, xrefs = result
                 claim.setdefault("ontology_terms", {})[slot] = curie
-                claim.setdefault("ontology_term_justifications", {})[slot] = (
+                justification = (
                     "semapv:LexicalMatching"
                     if resolver_name == "concept"
                     else "semapv:CompositeMatching"
                 )
+                claim.setdefault("ontology_term_justifications", {})[slot] = justification
                 if xrefs:
                     claim.setdefault("xrefs", {})[slot] = xrefs
+                # Emit a first-class SSSOMMapping fragment for the hit
+                # (indicium >= 1.11.0). Folded into
+                # IndiciumDocument.sssom_mappings downstream by
+                # Perspicacite. Label comes from xrefs when the
+                # resolver carried one; accessions and gene rows
+                # without a label key pass None and the fragment
+                # omits ``object_label``.
+                fragment = build_sssom_mapping(
+                    raw_text=name,
+                    object_curie=curie,
+                    object_label=xrefs.get("label") if isinstance(xrefs, dict) else None,
+                    justification=justification,
+                    resolver_kind=resolver_name,
+                )
+                claim.setdefault("sssom_mappings", {})[fragment["id"]] = fragment
                 break  # First hit per slot wins.
 
         return claim

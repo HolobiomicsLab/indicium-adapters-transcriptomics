@@ -1325,6 +1325,117 @@ def test_concept_resolver_trims_common_trailing_nouns(with_tail, canonical):
     assert noisy_hit[0] == canonical_hit[0]
 
 
+# --- SSSOMMapping emission (v0.14 / indicium >= 1.11.0) --------------------
+#
+# Each resolved slot in ``enrich_claim`` must produce a first-class
+# SSSOMMapping fragment alongside the existing ``ontology_terms`` entry.
+# The fragment dict is shaped like indicium.generated.model.SSSOMMapping's
+# constructor kwargs so downstream Perspicacite can fold it directly into
+# ``IndiciumDocument.sssom_mappings`` without any reshaping.
+
+def test_enrich_claim_emits_sssom_mapping_for_gene_subject():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "upregulated_in",
+        "object": "regenerating_oral_pole",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    assert mappings, "expected at least one SSSOMMapping fragment"
+    # Find the fragment for the subject slot (WNT4 -> HGNC:12783).
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "HGNC:12783"),
+        None,
+    )
+    assert fragment is not None
+    assert fragment["subject_id"] == "asb.lex:wnt4"
+    assert fragment["subject_label"] == "WNT4"
+    assert fragment["predicate_id"] == "skos:closeMatch"
+    assert fragment["object_id"] == "HGNC:12783"
+    assert fragment["mapping_justification"] == "semapv:CompositeMatching"
+    assert 0.0 < fragment["confidence"] <= 1.0
+    # The id follows the ``subject_id--object_id`` convention shipped in
+    # the indicium v1.11.0 test suite.
+    assert fragment["id"] == "asb.lex:wnt4--HGNC:12783"
+
+
+def test_enrich_claim_sssom_fragments_round_trip_through_indicium():
+    """The fragments must be valid kwargs for indicium's
+    ``SSSOMMapping`` pydantic constructor. Catches drift between this
+    helper's output and the upstream schema."""
+    from indicium.generated.model import SSSOMMapping
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "marker_for",
+        "object": "regenerating_oral_pole",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    assert mappings
+    for fragment in mappings.values():
+        # The pydantic constructor will raise on missing-required or
+        # type-mismatch — that's the test.
+        m = SSSOMMapping(**fragment)
+        assert m.subject_id == fragment["subject_id"]
+        assert m.object_id == fragment["object_id"]
+
+
+def test_enrich_claim_emits_sssom_for_accession_object():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "warner_2025_study",
+        "qualifier": "consolidates_dataset",
+        "object": "GSE168938",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "GEO:GSE168938"),
+        None,
+    )
+    assert fragment is not None
+    assert fragment["subject_id"] == "asb.lex:gse168938"
+    # Accessions are anchored regex matches, so confidence should be
+    # at the high floor.
+    assert fragment["confidence"] >= 0.95
+
+
+def test_enrich_claim_does_not_emit_sssom_when_no_resolution():
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "completely_unknown_token_xyz",
+        "qualifier": "differentially_expressed_in",
+        "object": "also_unknown_token_xyz",
+    })
+    # No resolver fires, no sssom_mappings emitted.
+    assert "sssom_mappings" not in out or out["sssom_mappings"] == {}
+
+
+def test_default_workflow_coupling_is_loose():
+    """Bulk transcriptomics pipelines (DESeq2 / Salmon / STAR) are
+    file-based and individually reproducible per Suter et al. 2025, so
+    the spec recommends ``"loose"``. Pin the class attribute so a
+    future refactor cannot silently drop the advertisement."""
+    assert BulkTranscriptomicsAdapter.default_workflow_coupling == "loose"
+
+
+def test_workflow_coupling_value_is_in_indicium_enum():
+    """The advertised default must be a member of indicium's
+    ``WorkflowCoupling`` enum (tight / loose / ad_hoc / unknown), so an
+    Evidence node populated with this value via
+    ``Evidence(workflow_coupling=adapter.default_workflow_coupling)``
+    constructs cleanly."""
+    from indicium.generated.model import Evidence, WorkflowCoupling
+    valid = {e.value for e in WorkflowCoupling}
+    assert BulkTranscriptomicsAdapter.default_workflow_coupling in valid
+    # Round-trip: indicium accepts the value as Evidence kwargs.
+    ev = Evidence(
+        workflow_coupling=BulkTranscriptomicsAdapter.default_workflow_coupling
+    )
+    assert ev.workflow_coupling == WorkflowCoupling.loose
+
+
 def test_concept_resolver_does_not_overtrim_legitimate_terms():
     """The trim-tail fallback only fires on a miss, so a term that
     already matches the index must not be re-routed through the trim

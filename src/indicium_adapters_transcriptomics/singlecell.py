@@ -19,6 +19,7 @@ from typing import Final
 import rdflib
 
 from indicium_adapters_transcriptomics._enrichment import (
+    build_sssom_mapping,
     resolve_anatomy,
     resolve_concept,
     resolve_gene,
@@ -70,6 +71,11 @@ class SingleCellTranscriptomicsAdapter:
 
     domain_id = "single-cell-transcriptomics"
     api_version = 1
+    # Single-cell pipelines (CellRanger / STARsolo / Seurat / Scanpy) are
+    # file-based and independently reproducible — same recommendation as
+    # the bulk sibling. Set by the spec on Evidence nodes derived from
+    # these claims (indicium >= 1.10.0, Suter et al. 2025).
+    default_workflow_coupling: str = "loose"
 
     # Every qualifier MUST match ``^[a-z][a-z0-9_]*$`` (snake_case).
     # Required by indicium >= 1.7.0: at serialisation time, Perspicacite
@@ -129,6 +135,8 @@ class SingleCellTranscriptomicsAdapter:
             claim["ontology_term_justifications"] = dict(claim["ontology_term_justifications"])
         if "xrefs" in claim:
             claim["xrefs"] = dict(claim["xrefs"])
+        if "sssom_mappings" in claim:
+            claim["sssom_mappings"] = dict(claim["sssom_mappings"])
 
         # Optional species hint forwarded to every resolver. Non-gene
         # resolvers ignore it.
@@ -144,13 +152,25 @@ class SingleCellTranscriptomicsAdapter:
                     continue
                 curie, xrefs = result
                 claim.setdefault("ontology_terms", {})[slot] = curie
-                claim.setdefault("ontology_term_justifications", {})[slot] = (
+                justification = (
                     "semapv:CompositeMatching"
                     if resolver_name == "gene"
                     else "semapv:LexicalMatching"
                 )
+                claim.setdefault("ontology_term_justifications", {})[slot] = justification
                 if xrefs:
                     claim.setdefault("xrefs", {})[slot] = xrefs
+                # Emit first-class SSSOMMapping fragment (indicium >= 1.11.0),
+                # mirroring the bulk adapter. Folded into
+                # IndiciumDocument.sssom_mappings downstream by Perspicacite.
+                fragment = build_sssom_mapping(
+                    raw_text=name,
+                    object_curie=curie,
+                    object_label=xrefs.get("label") if isinstance(xrefs, dict) else None,
+                    justification=justification,
+                    resolver_kind=resolver_name,
+                )
+                claim.setdefault("sssom_mappings", {})[fragment["id"]] = fragment
                 break  # First hit per slot wins.
 
         return claim
