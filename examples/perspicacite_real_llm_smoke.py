@@ -39,26 +39,38 @@ Run::
 Requires ``ANTHROPIC_API_KEY`` in Perspicacite-AI's ``.env`` (load_dotenv
 walks parent dirs from cwd, so launch from this repo's root).
 
-Findings from the first real run (2026-06-04, claude-sonnet-4-5):
+Findings — first real run (2026-06-04, claude-sonnet-4-5, pre-fix):
 
 * Qualifier choice: 4/4. The updated ``extraction_context()`` is
   steering the LLM cleanly to the signed / specialised forms — every
   passage's spec-canonical qualifier was the only emitted qualifier.
-* Subject enrichment: 3/4 (upreg, downreg, marker all resolve the gene
-  subject to HGNC). The ``pathway`` passage had an empty enrichment
-  even though qualifier choice was correct, because the LLM probably
-  embedded ``R-HSA-9012999`` inside a longer object string (e.g.
-  "canonical Wnt signaling pathway (Reactome ID R-HSA-9012999)") that
-  the accession regex does not match end-to-end.
-* Object enrichment for ``marker``: missed. Same root cause as
-  ``pathway`` — likely "cnidocyte cells" rather than the bare
-  "cnidocyte" in CL, so the concept index returns None.
+* Subject enrichment: 3/4 (upreg, downreg, marker all resolved the
+  gene subject to HGNC). The ``pathway`` passage had an empty
+  enrichment because the LLM emitted ``REACTOME:R-HSA-9012999`` as
+  the object — already prefixed — but the anchored accession regex
+  required an un-prefixed bare ID, so the resolver missed.
+* Object enrichment for ``marker``: missed because the LLM emitted
+  ``cnidocyte cells`` rather than the bare CL label ``cnidocyte``,
+  and the concept index does exact-match.
 
-Both enrichment gaps are LLM-phrasing-vs-regex-anchoring problems, not
-adapter logic bugs. Possible follow-ups (out of scope here): tighten
-``extraction_context()`` to ask for bare CURIE-shaped object values,
-or add a tolerant pre-processor that strips parenthetical text and
-re-checks slot values against the accession patterns.
+Findings — second real run (2026-06-04, same model, post-fix):
+
+* Qualifier choice: 4/4 (unchanged, LLM cache hit).
+* Subject enrichment: 4/4 (no change for upreg / downreg / marker;
+  pathway has a generic gene-set subject that does not resolve, which
+  matches expectations).
+* Object enrichment: 2/2 — both ``marker`` and ``pathway`` now resolve:
+  - ``cnidocyte cells`` -> ``CL:0011029`` via the concept-trim fallback
+    (added 2026-06-04 in ``_enrichment.resolve_concept``);
+  - ``REACTOME:R-HSA-9012999`` -> ``REACTOME:R-HSA-9012999`` via the
+    embedded-pathway fallback (added 2026-06-04 in
+    ``_registries.find_embedded_pathway_curie``, wired through
+    ``bulk._resolve_accession``).
+
+Both fixes are graceful-degradation rules: they fire only when the
+strict primary lookup misses, so the success path is unchanged. Pinned
+by ``tests/test_bulk.py::test_enriched_in_pathway_resolves_embedded_*``
+and ``::test_concept_resolver_trims_common_trailing_nouns``.
 """
 from __future__ import annotations
 

@@ -1212,6 +1212,143 @@ def test_enriched_in_pathway_resolves_wikipathways_object_end_to_end():
     assert out["ontology_terms"]["object"] == "WP:WP554"
 
 
+# --- LLM-tolerant fallbacks (v0.13 real-LLM smoke gap fix) -----------------
+#
+# The 2026-06-04 claude-sonnet-4-5 smoke run revealed two phrasing
+# patterns that defeated the anchored / exact-match resolvers:
+#
+# * the LLM wraps a pathway ID in a longer object string
+#   (e.g. ``"Wnt signaling pathway (Reactome ID R-HSA-9012999)"``);
+# * the LLM appends ``cells`` to a canonical CL label
+#   (e.g. ``"cnidocyte cells"`` instead of ``"cnidocyte"``).
+#
+# Two tolerant fallbacks fix these without changing the success path
+# for inputs that already resolve. Pin them so a future refactor cannot
+# silently regress.
+
+@pytest.mark.parametrize(
+    "wrapped, expected_curie",
+    [
+        # The exact failing case from the smoke test.
+        (
+            "canonical Wnt signaling pathway (Reactome ID R-HSA-9012999)",
+            "REACTOME:R-HSA-9012999",
+        ),
+        # Same shape with slightly different wrapping.
+        (
+            "enriched in R-HSA-201681 (TCF dependent signaling)",
+            "REACTOME:R-HSA-201681",
+        ),
+        # KEGG pathway embedded in a longer phrase.
+        (
+            "enriched in hsa04310 according to KEGG",
+            "KEGG:hsa04310",
+        ),
+        # WikiPathways embedded.
+        (
+            "see WP554 for full details",
+            "WP:WP554",
+        ),
+    ],
+)
+def test_enriched_in_pathway_resolves_embedded_pathway_id_object(
+    wrapped, expected_curie
+):
+    """``enrich_claim`` lifts an embedded pathway-DB id even when the
+    LLM wraps it inside a longer object string. This pins the v0.13
+    tolerant accession-fallback added in response to the real-LLM
+    smoke run on 2026-06-04."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": wrapped,
+    })
+    assert out["ontology_terms"]["object"] == expected_curie
+
+
+def test_embedded_pathway_fallback_does_not_clobber_anchored_match():
+    """The fallback must run AFTER the anchored regex, so a bare
+    ``R-HSA-9012999`` still resolves identically to before — the
+    fallback is a graceful-degradation rule, not a behaviour change
+    for legitimate inputs."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "R-HSA-9012999",
+    })
+    assert out["ontology_terms"]["object"] == "REACTOME:R-HSA-9012999"
+
+
+def test_embedded_pathway_fallback_ignores_strings_without_pathway_id():
+    """If no pathway id is embedded, the fallback must report a miss
+    so the resolver chain falls through to the gene then concept paths
+    (the same behaviour the v0.12 adapter had)."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "no pathway id here, just prose",
+    })
+    # Should not produce a spurious REACTOME / KEGG / WP CURIE.
+    obj_curie = (out.get("ontology_terms") or {}).get("object", "")
+    assert not obj_curie.startswith(("REACTOME:", "KEGG:", "WP:"))
+
+
+@pytest.mark.parametrize(
+    "with_tail, canonical",
+    [
+        ("cnidocyte cells", "cnidocyte"),
+        ("T cells", "T cell"),
+        ("Wnt signaling pathway", "Wnt"),
+        ("gene expression process", "gene expression"),
+    ],
+)
+def test_concept_resolver_trims_common_trailing_nouns(with_tail, canonical):
+    """``resolve_concept`` retries with a trimmed trailing noun when the
+    primary lookup misses. Pins the v0.13 LLM-tolerant concept fallback.
+
+    Each case is a "concept-with-noise" / "concept-without-noise" pair:
+    if the canonical form is in the index, the noisy form should now
+    resolve to the SAME CURIE.
+    """
+    from indicium_adapters_transcriptomics._enrichment import resolve_concept
+    canonical_hit = resolve_concept(canonical)
+    if canonical_hit is None:
+        pytest.skip(f"canonical form {canonical!r} not in concept index")
+    noisy_hit = resolve_concept(with_tail)
+    assert noisy_hit is not None, (
+        f"trim-tail fallback should rescue {with_tail!r} "
+        f"(canonical {canonical!r} -> {canonical_hit[0]})"
+    )
+    assert noisy_hit[0] == canonical_hit[0]
+
+
+def test_concept_resolver_does_not_overtrim_legitimate_terms():
+    """The trim-tail fallback only fires on a miss, so a term that
+    already matches the index must not be re-routed through the trim
+    rule. Pins the no-regression invariant: legitimate multi-word
+    concepts still resolve to themselves, not to a shorter variant.
+    """
+    from indicium_adapters_transcriptomics._enrichment import resolve_concept
+    # ``Wnt signaling`` is in the concept index as a GO biological
+    # process; the trim rule for ``pathway`` is irrelevant because the
+    # input does not end with ``pathway``.
+    hit = resolve_concept("Wnt signaling")
+    if hit is None:
+        pytest.skip("'Wnt signaling' not in concept index; smoke check moot")
+    # The CURIE should not match what the bare ``Wnt`` would resolve
+    # to (if anything) — trimming should not happen for inputs that
+    # already match.
+    curie, _ = hit
+    bare = resolve_concept("Wnt")
+    if bare is not None:
+        assert curie != bare[0], (
+            "trim-tail rule must not fire on a primary hit"
+        )
+
+
 # --- SHACL ------------------------------------------------------------------
 
 

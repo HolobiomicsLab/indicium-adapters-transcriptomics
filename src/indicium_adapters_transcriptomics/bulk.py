@@ -22,7 +22,10 @@ import rdflib
 
 from indicium_adapters_transcriptomics._enrichment import resolve_concept, resolve_gene
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
-from indicium_adapters_transcriptomics._registries import accession_to_curie
+from indicium_adapters_transcriptomics._registries import (
+    accession_to_curie,
+    find_embedded_pathway_curie,
+)
 
 __all__ = ["BulkTranscriptomicsAdapter", "accession_to_curie"]
 
@@ -45,16 +48,29 @@ _ENRICHABLE_SLOTS: Final[tuple[str, ...]] = ("subject", "object")
 def _resolve_accession(
     name: str, *, species: str | None = None
 ) -> tuple[str, dict[str, str]] | None:
-    """Repository-accession resolver.
+    """Repository / pathway-DB accession resolver.
 
     Signature matches the gene and concept resolvers so the dispatcher can
-    treat all three uniformly. ``species`` is ignored: repository accessions
-    are species-agnostic.
+    treat all three uniformly. ``species`` is ignored: repository
+    accessions are species-agnostic.
+
+    Resolution is two-pass:
+
+    1. Strict anchored match via ``accession_to_curie`` (the common case:
+       ``"GSE168938"`` -> ``"GEO:GSE168938"``).
+    2. Embedded pathway-DB scan via ``find_embedded_pathway_curie`` for
+       Reactome / KEGG / WP IDs wrapped in longer LLM-emitted strings
+       (e.g. ``"Wnt pathway (Reactome ID R-HSA-9012999)"`` ->
+       ``"REACTOME:R-HSA-9012999"``). Only fires if step 1 misses, so
+       legitimate inputs that already match in step 1 keep their exact
+       previous behaviour.
     """
     del species
     curie = accession_to_curie(name)
     if curie is None:
-        return None
+        curie = find_embedded_pathway_curie(name)
+        if curie is None:
+            return None
     return curie, {}
 
 

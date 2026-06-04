@@ -745,6 +745,37 @@ def resolve_anatomy(
     return row["curie"], xref
 
 
+# Trim-rules for ``resolve_concept``'s LLM-tolerant fallback. Each entry
+# is ``(suffix_to_match_lowercase, replacement)``. When the original
+# lookup misses, we try each rule in order: if the lowercased input ends
+# with ``suffix_to_match``, replace that suffix with ``replacement`` and
+# re-lookup. The first rule whose re-lookup hits wins; otherwise we fall
+# through to the next rule.
+#
+# Two complementary shapes for plural cell-type mentions:
+# ``"cnidocyte cells"`` -> ``"cnidocyte"`` (suffix removed entirely),
+# ``"T cells"`` -> ``"T cell"`` (plural collapsed to canonical singular).
+# Longer suffixes precede shorter overlaps so ``"signaling pathway"``
+# is not mis-trimmed by the bare ``" pathway"`` rule.
+#
+# Conservative on purpose: each rule requires a leading whitespace so a
+# trim never bisects a word (``"mesencephalon"`` is not chopped by the
+# ``" cell"`` rule because there is no preceding space). One trim per
+# attempt; no recursion.
+_CONCEPT_TRIM_RULES: tuple[tuple[str, str], ...] = (
+    (" signaling pathway", ""),
+    (" signalling pathway", ""),
+    (" pathway", ""),
+    (" process", ""),
+    (" tissue", ""),
+    (" cells", ""),       # ``cnidocyte cells`` -> ``cnidocyte``
+    (" cells", " cell"),  # ``T cells`` -> ``T cell``
+    (" cell", ""),
+    (" genes", ""),
+    (" gene", ""),
+)
+
+
 def resolve_concept(
     name: str, *, species: str | None = None
 ) -> tuple[str, dict[str, str]] | None:
@@ -753,9 +784,31 @@ def resolve_concept(
     ``species`` is accepted for signature uniformity; concept entries
     (methodology, protocols, cell types, chemicals, units, and so on) are
     not species-specific, so the hint is ignored.
+
+    If the primary lookup misses, retries with one common trailing noun
+    trimmed (e.g. ``"cnidocyte cells"`` -> ``"cnidocyte"``, ``"T cells"``
+    -> ``"T cell"``, ``"Wnt signaling pathway"`` -> ``"Wnt"``). The
+    fallback fires only when the original term is not in the index, so
+    the success path is unchanged for terms that already match.
     """
     del species
     row = CONCEPT_INDEX.lookup(name)
+    if row is None and isinstance(name, str):
+        # Tolerant fallback: real LLM extractors (claude-sonnet-4-5
+        # verified 2026-06-04) sometimes append common trailing nouns
+        # to a canonical term. Try trimming them once and re-lookup.
+        stripped = name.rstrip()
+        lowered = stripped.lower()
+        for match_suffix, replacement in _CONCEPT_TRIM_RULES:
+            if lowered.endswith(match_suffix):
+                trimmed = stripped[: -len(match_suffix)] + replacement
+                trimmed = trimmed.rstrip()
+                if trimmed:
+                    row = CONCEPT_INDEX.lookup(trimmed)
+                    if row is not None:
+                        break
+        if row is None:
+            return None
     if row is None:
         return None
     xref = {

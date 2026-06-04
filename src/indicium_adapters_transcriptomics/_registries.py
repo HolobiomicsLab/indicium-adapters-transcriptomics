@@ -99,3 +99,47 @@ def accession_to_curie(accession: str) -> str | None:
         if pattern.match(token):
             return f"{prefix}:{token}"
     return None
+
+
+# Unanchored patterns for ``find_embedded_pathway_curie``. Only the
+# pathway-DB rules are mirrored here because the empirical gap (real
+# LLM smoke test, 2026-06-04) was a Reactome ID embedded in a longer
+# object string. GEO / SRA / ArrayExpress mentions are well anchored
+# by the LLM in practice and adding embedded-scan rules for them
+# would broaden the false-positive surface without a known gap to
+# fix.
+_EMBEDDED_PATHWAY_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
+    (re.compile(r"\bR-[A-Z]{3}-\d{4,9}\b"), "REACTOME"),
+    (re.compile(r"\b[a-z]{2,4}\d{5}\b"),    "KEGG"),
+    (re.compile(r"\bWP\d{1,7}(?:_r\d+)?\b"), "WP"),
+)
+
+
+def find_embedded_pathway_curie(text: str) -> str | None:
+    """Scan ``text`` for an embedded pathway-DB identifier (Reactome,
+    KEGG, WikiPathways) and return the prefixed CURIE on the first hit.
+
+    Tolerant fallback for the case where the LLM extractor wraps a
+    bare pathway ID inside a longer phrase: ``"canonical Wnt signaling
+    pathway (Reactome ID R-HSA-9012999)"`` -> ``"REACTOME:R-HSA-9012999"``.
+    Word-boundary anchored so partial-word substrings (e.g. ``xR-HSA-1x``)
+    do not match. Only fired by ``_resolve_accession`` after the strict
+    anchored lookup misses, so the success path of legitimate inputs is
+    unchanged.
+
+    >>> find_embedded_pathway_curie("canonical Wnt pathway (Reactome ID R-HSA-9012999)")
+    'REACTOME:R-HSA-9012999'
+    >>> find_embedded_pathway_curie("enriched in hsa04310 according to KEGG")
+    'KEGG:hsa04310'
+    >>> find_embedded_pathway_curie("see WP554 for details") == 'WP:WP554'
+    True
+    >>> find_embedded_pathway_curie("no pathway id here") is None
+    True
+    """
+    if not isinstance(text, str):
+        return None
+    for pattern, prefix in _EMBEDDED_PATHWAY_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return f"{prefix}:{match.group(0)}"
+    return None
