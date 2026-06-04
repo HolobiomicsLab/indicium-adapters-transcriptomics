@@ -187,6 +187,25 @@ The 17 bulk-adapter qualifiers cover claim-level feature assertions (`differenti
 
 The 5 single-cell-adapter qualifiers (`marker_of_cell_type`, `enriched_in_cluster`, `co_expressed_in_cell_type`, `localized_in_tissue`, `localized_in_spatial_domain`) cover assertions that only make sense at per-cell or per-spot resolution.
 
+## SSSOMMapping emission and `default_workflow_coupling` (v0.14)
+
+Every resolver hit in `enrich_claim()` now produces a first-class [SSSOMMapping](https://w3id.org/sssom/) fragment in `claim["sssom_mappings"]` (dict keyed by mapping id). Each fragment matches `indicium.generated.model.SSSOMMapping`'s pydantic constructor kwargs (indicium ≥ 1.11.0), so downstream consumers can fold the entries straight into `IndiciumDocument.sssom_mappings` without round-tripping.
+
+The fragment uses the synthetic `asb.lex:` namespace for the subject (a slug of the raw text) so free-text LLM mentions stay deduplicable across a document. The predicate routes via SSSOM convention:
+
+| Resolver kind | Predicate | Confidence floor | Notes |
+|---|---|---|---|
+| `accession` | `skos:exactMatch` | 0.99 | regex-anchored repository accession or pathway ID |
+| `gene` | `skos:exactMatch` | 0.95 | HGNC / MGI / FlyBase / WormBase / ZFIN / Ensembl symbol lookup |
+| `anatomy` | `skos:exactMatch` | 0.95 | UBERON / FBbt / WBbt / ZFA / EMAPA |
+| `concept` | `skos:exactMatch` | 0.90 | bio.tools, NCIT, INO, OBI, STATO, GO, CL, ... |
+| `embedded_pathway` | `skos:closeMatch` | 0.85 | substring fallback for IDs wrapped in longer text ("Reactome ID R-HSA-..."). |
+| `trimmed_concept` | `skos:closeMatch` | 0.80 | trim-tail fallback for "cnidocyte cells" → "cnidocyte" |
+
+`skos:exactMatch` means the raw text is interchangeable with the CURIE (canonical identifier); `skos:closeMatch` is used for the two LLM-tolerant fallback paths where we modified the input or extracted the id from a longer wrapping string. Downstream SPARQL queries can filter on `confidence >= 0.90` or `predicate = skos:exactMatch` to drop heuristic hits.
+
+Both adapters also expose `default_workflow_coupling = "loose"` as a class attribute (indicium ≥ 1.10.0). Bulk RNA-seq (DESeq2 / edgeR / Salmon / STAR) and single-cell (CellRanger / STARsolo / Seurat / Scanpy) pipelines are file-based and individually reproducible per Suter et al. 2025, so the spec recommends `"loose"`. Perspicacite reads this attribute when constructing `Evidence` nodes for transcriptomics claims.
+
 ## SHACL shapes
 
 Both adapters' `shacl_shapes()` return an `rdflib.Graph` with a NodeShape that validates CURIE format on ASB `Claim` graphs. Pipeline-level RDF validation for transcriptomics workflow classes (SO, UBERON, CL, EFO shapes) lives upstream in the consuming graph store, not here.

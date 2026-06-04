@@ -2,6 +2,27 @@
 
 ## v0.14.0 — Full indicium-adapters #1 alignment: SSSOMMapping + workflow_coupling (2026-06-04)
 
+### SKOS predicate routing + fallback-kind confidence
+
+Pre-release refinement of the SSSOMMapping emission: every resolver now signals its sub-kind via an internal `_resolver_kind` sentinel inside the returned xrefs (popped by the dispatcher before xrefs is stored on the claim, so downstream consumers never see it). The sentinel routes the SSSOM fragment to the correct confidence floor AND the correct SKOS predicate:
+
+* **Strict resolutions** (regex-anchored accession, gene-symbol lookup, anatomy lookup, canonical concept lookup) emit `skos:exactMatch` because the raw text is interchangeable with the CURIE.
+* **LLM-tolerant fallbacks** emit `skos:closeMatch` because we either modified the input (trim-tail) or extracted the id from a longer wrapping string (embedded-pathway substring scan).
+
+Without this distinction, every fragment got `skos:closeMatch` plus the `accession` / `concept` confidence floor regardless of which path actually fired — downstream SPARQL queries could not tell a heuristic substring hit from a regex-anchored accession match. The fix lets consumers filter on `predicate = skos:exactMatch` or `confidence >= 0.90` to drop the soft matches.
+
+| Path | Predicate | Confidence |
+|---|---|---|
+| accession (regex hit) | `skos:exactMatch` | 0.99 |
+| gene / anatomy / concept (lookup hit) | `skos:exactMatch` | 0.95 / 0.95 / 0.90 |
+| embedded_pathway (substring fallback) | `skos:closeMatch` | 0.85 |
+| trimmed_concept (trim-tail fallback) | `skos:closeMatch` | 0.80 |
+
+5 additional pinning tests in `test_bulk.py` cover the routing behaviour: embedded-pathway emits closeMatch + 0.85; strict accession emits exactMatch + 0.99; trimmed concept emits closeMatch + 0.80; strict concept emits exactMatch + 0.90; the `_resolver_kind` sentinel never leaks into the claim's `xrefs`.
+
+### Initial v0.14 work
+
+
 Closes the two remaining "Leverage current indicium features" items of [indicium-adapters #1](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) now that the upstream support shipped in `indicium` v1.11.0 (SSSOMMapping) and v1.10.0 (Evidence.workflow_coupling) on 2026-06-03. Additive: every claim shape from v0.13 still works; the new `sssom_mappings` field is emitted alongside the existing `ontology_terms` / `ontology_term_justifications` / `xrefs`.
 
 ### SSSOMMapping emission (indicium >= 1.11.0)

@@ -68,14 +68,22 @@ def _resolve_accession(
        ``"REACTOME:R-HSA-9012999"``). Only fires if step 1 misses, so
        legitimate inputs that already match in step 1 keep their exact
        previous behaviour.
+
+    The returned xrefs dict carries an internal ``"_resolver_kind"``
+    sentinel (``"accession"`` for path 1, ``"embedded_pathway"`` for
+    path 2). The dispatcher pops it before storing xrefs on the claim,
+    so downstream consumers never see the sentinel; it carries the
+    kind into ``build_sssom_mapping`` so fallback hits get the right
+    confidence floor and ``skos:closeMatch`` predicate.
     """
     del species
     curie = accession_to_curie(name)
+    if curie is not None:
+        return curie, {"_resolver_kind": "accession"}
+    curie = find_embedded_pathway_curie(name)
     if curie is None:
-        curie = find_embedded_pathway_curie(name)
-        if curie is None:
-            return None
-    return curie, {}
+        return None
+    return curie, {"_resolver_kind": "embedded_pathway"}
 
 
 _Resolver = Callable[..., tuple[str, dict[str, str]] | None]
@@ -304,6 +312,18 @@ class BulkTranscriptomicsAdapter:
                 if result is None:
                     continue
                 curie, xrefs = result
+                # The resolver may have signalled a sub-kind via the
+                # ``_resolver_kind`` sentinel inside xrefs (e.g. the
+                # ``accession`` slot's pathway-substring fallback reports
+                # ``embedded_pathway``; the ``concept`` slot's trim-tail
+                # fallback reports ``trimmed_concept``). Pop it before
+                # storing xrefs so downstream consumers never see the
+                # sentinel, but use it to drive the SSSOM confidence
+                # floor and ``skos:closeMatch`` predicate routing.
+                if isinstance(xrefs, dict):
+                    actual_kind = xrefs.pop("_resolver_kind", resolver_name)
+                else:
+                    actual_kind = resolver_name
                 claim.setdefault("ontology_terms", {})[slot] = curie
                 justification = (
                     "semapv:LexicalMatching"
@@ -325,7 +345,7 @@ class BulkTranscriptomicsAdapter:
                     object_curie=curie,
                     object_label=xrefs.get("label") if isinstance(xrefs, dict) else None,
                     justification=justification,
-                    resolver_kind=resolver_name,
+                    resolver_kind=actual_kind,
                 )
                 claim.setdefault("sssom_mappings", {})[fragment["id"]] = fragment
                 break  # First hit per slot wins.

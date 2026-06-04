@@ -151,6 +151,13 @@ class SingleCellTranscriptomicsAdapter:
                 if result is None:
                     continue
                 curie, xrefs = result
+                # Pop the ``_resolver_kind`` sentinel before storing
+                # xrefs on the claim (see bulk.py for rationale). Use
+                # the sub-kind to drive SSSOM predicate / confidence.
+                if isinstance(xrefs, dict):
+                    actual_kind = xrefs.pop("_resolver_kind", resolver_name)
+                else:
+                    actual_kind = resolver_name
                 claim.setdefault("ontology_terms", {})[slot] = curie
                 justification = (
                     "semapv:CompositeMatching"
@@ -168,7 +175,7 @@ class SingleCellTranscriptomicsAdapter:
                     object_curie=curie,
                     object_label=xrefs.get("label") if isinstance(xrefs, dict) else None,
                     justification=justification,
-                    resolver_kind=resolver_name,
+                    resolver_kind=actual_kind,
                 )
                 claim.setdefault("sssom_mappings", {})[fragment["id"]] = fragment
                 break  # First hit per slot wins.

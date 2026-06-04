@@ -1351,7 +1351,9 @@ def test_enrich_claim_emits_sssom_mapping_for_gene_subject():
     assert fragment is not None
     assert fragment["subject_id"] == "asb.lex:wnt4"
     assert fragment["subject_label"] == "WNT4"
-    assert fragment["predicate_id"] == "skos:closeMatch"
+    # Strict gene-symbol resolution is interchangeable with the HGNC
+    # identifier, so predicate routes to skos:exactMatch (v0.14.1).
+    assert fragment["predicate_id"] == "skos:exactMatch"
     assert fragment["object_id"] == "HGNC:12783"
     assert fragment["mapping_justification"] == "semapv:CompositeMatching"
     assert 0.0 < fragment["confidence"] <= 1.0
@@ -1418,6 +1420,122 @@ def test_default_workflow_coupling_is_loose():
     the spec recommends ``"loose"``. Pin the class attribute so a
     future refactor cannot silently drop the advertisement."""
     assert BulkTranscriptomicsAdapter.default_workflow_coupling == "loose"
+
+
+# --- SSSOMMapping predicate + confidence: fallback identity (v0.14 refinement)
+#
+# v0.14 introduces a ``_resolver_kind`` sentinel inside ``xrefs`` so the
+# adapter can distinguish strict resolutions (``accession``, ``concept``)
+# from their LLM-tolerant fallbacks (``embedded_pathway``, ``trimmed_concept``).
+# The sentinel routes the SSSOM emission to the right confidence floor AND
+# the right SKOS predicate:
+#
+# * Strict resolution -> ``skos:exactMatch`` + high confidence (>= 0.90).
+# * Fallback path     -> ``skos:closeMatch`` + lower confidence (<= 0.85).
+#
+# Without this distinction, downstream SPARQL queries cannot tell a
+# heuristic substring-scan hit from a regex-anchored accession match.
+
+def test_embedded_pathway_fallback_emits_close_match_with_lower_confidence():
+    """Accession-substring fallback (embedded_pathway) must emit
+    ``skos:closeMatch`` with the 0.85 confidence floor, not the
+    ``skos:exactMatch`` + 0.99 that a strict accession hit gets."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "Wnt signaling pathway (Reactome ID R-HSA-9012999)",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "REACTOME:R-HSA-9012999"),
+        None,
+    )
+    assert fragment is not None
+    assert fragment["predicate_id"] == "skos:closeMatch"
+    assert fragment["confidence"] == 0.85
+
+
+def test_strict_accession_hit_emits_exact_match_with_high_confidence():
+    """The strict accession-regex path keeps ``skos:exactMatch`` + 0.99,
+    so the close-vs-exact distinction is meaningful (one routes one way,
+    the other routes the other way)."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "warner_2025_study",
+        "qualifier": "consolidates_dataset",
+        "object": "GSE168938",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "GEO:GSE168938"),
+        None,
+    )
+    assert fragment is not None
+    assert fragment["predicate_id"] == "skos:exactMatch"
+    assert fragment["confidence"] == 0.99
+
+
+def test_trimmed_concept_fallback_emits_close_match_with_lower_confidence():
+    """Concept trim-tail fallback must emit ``skos:closeMatch`` with the
+    0.80 confidence floor. Uses ``cnidocyte cells`` -> ``CL:0011029`` as
+    the test case (the marker LLM passage in the v0.13 smoke run)."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "marker_for",
+        "object": "cnidocyte cells",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "CL:0011029"),
+        None,
+    )
+    assert fragment is not None, "expected the trim-tail fallback to resolve cnidocyte"
+    assert fragment["predicate_id"] == "skos:closeMatch"
+    assert fragment["confidence"] == 0.80
+
+
+def test_strict_concept_hit_emits_exact_match_with_concept_floor():
+    """Direct concept-index hit (no trim-tail fallback) emits
+    ``skos:exactMatch`` + 0.90, the strict concept floor."""
+    a = BulkTranscriptomicsAdapter()
+    # ``DESeq2`` resolves directly via the bio.tools concept layer.
+    out = a.enrich_claim({
+        "subject": "warner_2025_study",
+        "qualifier": "tested_with",
+        "object": "DESeq2",
+    })
+    mappings = out.get("sssom_mappings") or {}
+    fragment = next(
+        (m for m in mappings.values()
+         if m.get("object_id") == "biotools:deseq2"),
+        None,
+    )
+    assert fragment is not None
+    assert fragment["predicate_id"] == "skos:exactMatch"
+    assert fragment["confidence"] == 0.90
+
+
+def test_resolver_kind_sentinel_is_not_leaked_into_xrefs():
+    """The ``_resolver_kind`` sentinel must be popped by the dispatcher
+    before xrefs reaches the claim. Downstream consumers that iterate
+    or serialise xrefs must not see the internal key."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MMP9",
+        "qualifier": "marker_for",
+        "object": "cnidocyte cells",
+    })
+    xrefs_by_slot = out.get("xrefs") or {}
+    for slot_xref in xrefs_by_slot.values():
+        if isinstance(slot_xref, dict):
+            assert "_resolver_kind" not in slot_xref, (
+                f"sentinel leaked into xrefs: {slot_xref!r}"
+            )
 
 
 def test_workflow_coupling_value_is_in_indicium_enum():

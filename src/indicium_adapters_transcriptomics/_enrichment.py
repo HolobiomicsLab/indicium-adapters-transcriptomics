@@ -50,6 +50,25 @@ _SSSOM_CONFIDENCE_BY_KIND: Final[dict[str, float]] = {
 }
 
 
+# SSSOM predicate picked per resolver kind. ``skos:exactMatch`` for the
+# strict resolutions where the raw text is interchangeable with the CURIE
+# (HGNC symbol, accession regex hit, canonical lexical lookup);
+# ``skos:closeMatch`` for the LLM-tolerant fallbacks where we modified
+# the input (trimmed a trailing noun) or extracted the id from a longer
+# wrapping string. The skos terminology gain matters at the SPARQL
+# boundary: a consumer querying for "interchangeable identities" can
+# include only ``exactMatch`` rows; a consumer wanting broader recall
+# accepts both.
+_SSSOM_PREDICATE_BY_KIND: Final[dict[str, str]] = {
+    "accession":         "skos:exactMatch",
+    "gene":              "skos:exactMatch",
+    "anatomy":           "skos:exactMatch",
+    "concept":           "skos:exactMatch",
+    "embedded_pathway":  "skos:closeMatch",
+    "trimmed_concept":   "skos:closeMatch",
+}
+
+
 def _slug_for_sssom_subject(text: str) -> str:
     """Sanitize a free-text mention into a URL-safe SSSOM subject suffix.
 
@@ -103,6 +122,13 @@ def build_sssom_mapping(
     document without needing a pre-existing identifier registry. The
     ``id`` field follows the ``{subject_id}--{object_id}`` convention
     shipped in the indicium v1.11.0 test suite.
+
+    The ``predicate_id`` is ``skos:exactMatch`` for strict resolutions
+    where the raw text is interchangeable with the CURIE (HGNC symbol
+    lookup, accession-regex hit, canonical concept lookup) and
+    ``skos:closeMatch`` for fallbacks where the input was modified
+    (trim-tail) or the id was extracted from a longer wrapping string
+    (embedded-pathway scan).
     """
     slug = _slug_for_sssom_subject(raw_text)
     subject_id = f"asb.lex:{slug}"
@@ -110,7 +136,9 @@ def build_sssom_mapping(
         "id": f"{subject_id}--{object_curie}",
         "subject_id": subject_id,
         "subject_label": raw_text,
-        "predicate_id": "skos:closeMatch",
+        "predicate_id": _SSSOM_PREDICATE_BY_KIND.get(
+            resolver_kind, "skos:closeMatch"
+        ),
         "object_id": object_curie,
         "mapping_justification": justification,
         "confidence": _SSSOM_CONFIDENCE_BY_KIND.get(resolver_kind, 0.5),
@@ -886,8 +914,17 @@ def resolve_concept(
     -> ``"T cell"``, ``"Wnt signaling pathway"`` -> ``"Wnt"``). The
     fallback fires only when the original term is not in the index, so
     the success path is unchanged for terms that already match.
+
+    The returned ``xrefs`` dict carries an internal ``"_resolver_kind"``
+    sentinel — ``"concept"`` for a primary lookup hit, ``"trimmed_concept"``
+    when the trim-tail fallback was used. The dispatcher in
+    ``enrich_claim`` pops this sentinel before storing ``xrefs`` on the
+    claim, so it never reaches consumers; it carries the kind into
+    ``build_sssom_mapping`` so the SSSOM fragment gets the right
+    confidence floor and ``skos:closeMatch`` predicate for fallback hits.
     """
     del species
+    used_fallback = False
     row = CONCEPT_INDEX.lookup(name)
     if row is None and isinstance(name, str):
         # Tolerant fallback: real LLM extractors (claude-sonnet-4-5
@@ -902,12 +939,14 @@ def resolve_concept(
                 if trimmed:
                     row = CONCEPT_INDEX.lookup(trimmed)
                     if row is not None:
+                        used_fallback = True
                         break
         if row is None:
             return None
     if row is None:
         return None
     xref = {
+        "_resolver_kind": "trimmed_concept" if used_fallback else "concept",
         "curie": row["curie"],
         "label": row["label"],
         "ontology": row["ontology"],
