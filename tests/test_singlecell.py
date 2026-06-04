@@ -421,29 +421,20 @@ def test_singlecell_anatomy_resolution_justification_is_lexical_matching():
 
 
 def test_singlecell_concept_resolution_justification_is_lexical_matching():
-    """Concept (OLS4/bio.tools name) resolution is lexical → semapv:LexicalMatching."""
-    from indicium_adapters_transcriptomics import _enrichment, singlecell
+    """Concept (OLS4 / bio.tools / CL name) resolution is lexical, so its
+    SEMAPV justification is ``semapv:LexicalMatching``.
 
-    fake_row = {
-        "term": "rna-seq",
-        "curie": "OBI:0001177",
-        "label": "RNA-seq assay",
-        "description": "An assay that sequences expressed RNA.",
-        "ontology": "OBI",
-        "source": "monkeypatch fixture",
-    }
-    import pytest  # noqa: F401 — imported here for monkeypatch use in non-fixture context
-
-    # We can't monkeypatch here without fixture — use the real index's CL term instead.
-    # cnidocyte is in the real CL concept index, so use the object slot
-    # (gene wins on subject; concept fires on object via CL).
-    a = singlecell.SingleCellTranscriptomicsAdapter()
+    ``cnidocyte`` is in the real CL concept index. With the qualifier
+    ``marker_of_cell_type`` the resolver chain is gene then anatomy then
+    concept, so the gene resolver claims the subject slot (WNT4 -> HGNC)
+    and the concept resolver claims the object slot (cnidocyte -> CL).
+    """
+    a = SingleCellTranscriptomicsAdapter()
     out = a.enrich_claim({
         "subject": "WNT4",
         "qualifier": "marker_of_cell_type",
         "object": "cnidocyte",
     })
-    # object resolves via concept (CL) → LexicalMatching
     assert out["ontology_terms"]["object"] == "CL:0011029"
     assert out["ontology_term_justifications"]["object"] == "semapv:LexicalMatching"
 
