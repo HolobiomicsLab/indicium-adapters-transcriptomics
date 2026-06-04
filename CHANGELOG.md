@@ -1,5 +1,85 @@
 # Changelog
 
+## v0.13.0 — indicium-adapters #1 spec alignment (2026-06-04)
+
+Additive alignment with the [indicium-adapters #1](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) contract. No breaking changes: every qualifier and CURIE prefix shipped before v0.13 still works exactly as it did. The deliberate divergence from the spec (two siblings `bulk-transcriptomics` + `single-cell-transcriptomics` instead of one `transcriptomics` adapter) is now documented in the README; rationale is the disjoint-qualifier structural invariant enforced by `tests/test_composition.py`.
+
+### Qualifiers added to `BulkTranscriptomicsAdapter.qualifiers`
+
+- `upregulated_in` / `downregulated_in` — signed specialisations of `differentially_expressed_in`. Extractors should prefer the signed form when log2FC sign is known and fall back to the generic form otherwise.
+- `marker_for` — spec-canonical naming alongside the legacy `marker_of`. Both stay supported; new claims should prefer `marker_for`.
+- `enriched_in_pathway` — narrows `enriched_for` for claims whose object resolves into REACTOME / KEGG / WP. The generic `enriched_for` is kept for GO / phenotype / disease enrichment.
+
+The four new qualifiers fall through to the default resolver priority (`accession > gene > concept`) since they are feature-level claims; the study-level priority map is unchanged.
+
+### CURIE prefixes added to `TRANSCRIPTOMICS_PREFIXES`
+
+| Prefix | Expansion |
+|---|---|
+| `REACTOME` | `https://identifiers.org/reactome:` |
+| `KEGG` | `https://identifiers.org/kegg.pathway:` |
+| `WP` | `https://identifiers.org/wikipathways:` |
+
+### Pathway-DB identifier recognition in `accession_to_curie`
+
+The accession resolver now recognises pathway-database identifiers in the same way it recognises repository accessions, so `enrich_claim` can lift a bare `R-HSA-9012999` / `hsa04310` / `WP554` to its prefixed CURIE without the LLM extractor having to pre-prefix:
+
+- Reactome: `R-{3-letter species}-{4-9 digits}` (e.g. `R-HSA-9012999`)
+- KEGG pathway: `{2-4 letter org prefix}{5 digits}` (e.g. `hsa04310`, `map04310`, `ko04310`)
+- WikiPathways: `WP{1-7 digits}` with optional `_r{digits}` revision suffix (e.g. `WP554`, `WP554_r118500`)
+
+### `extraction_context()` updates
+
+The prompt fragment now documents the direction-of-regulation rule (signed forms when log2FC sign is known, generic form otherwise), the pathway-vs-general enrichment rule (`enriched_in_pathway` for REACTOME/KEGG/WP, `enriched_for` for GO/phenotype/disease) and the `marker_for` vs `marker_of` rule (spec-canonical form preferred for new claims, legacy form kept for backward compatibility). It also notes that bare pathway IDs are auto-lifted to CURIEs.
+
+### Tests
+
+8 new pinning tests:
+
+- `tests/test_bulk.py::test_qualifiers_include_spec_aligned_signed_and_pathway_terms`
+- `tests/test_bulk.py::test_enrich_signed_de_routes_through_default_priority`
+- `tests/test_bulk.py::test_enrich_marker_for_resolves_gene_subject`
+- `tests/test_bulk.py::test_pathway_accession_to_curie` (12 parametrised cases)
+- `tests/test_bulk.py::test_non_pathway_strings_do_not_misroute_to_pathway_prefix` (8 edge cases)
+- `tests/test_bulk.py::test_enriched_in_pathway_resolves_reactome_object_end_to_end`
+- `tests/test_bulk.py::test_enriched_in_pathway_resolves_kegg_object_end_to_end`
+- `tests/test_bulk.py::test_enriched_in_pathway_resolves_wikipathways_object_end_to_end`
+- `tests/test_namespaces.py::test_pathway_database_prefixes_present`
+
+
+## v0.12.0 — Multi-species anatomy, broader vocabulary, layered concept index (2026-06-03)
+
+Anatomy resolution becomes species-aware. The concept index grows from ~400 to ~547 verified CURIEs across 21 ontology sources. The single-cell adapter's anatomy lookup gains a `species` claim hint that routes terms to organism-specific ontologies when available.
+
+### Multi-species `AnatomyIndex`
+
+The anatomy lookup, previously UBERON-only, now merges UBERON (35 species-agnostic terms) with four organism-paired ontologies:
+
+| Ontology | Species | Entries |
+|---|---|---|
+| UBERON | species-agnostic | 35 |
+| FBbt | *Drosophila melanogaster* | 34 |
+| WBbt | *Caenorhabditis elegans* | 21 |
+| ZFA | zebrafish | 34 |
+| EMAPA | mouse developmental | 28 |
+
+Lookup is species-aware: a `species` hint on the claim routes to the organism-specific ontology when available, with UBERON winning by default. Cnidarian-specific terms (*physa*, *mesoglea*, *gastrodermis*) are documented as triaged out because UBERON has no entry for them.
+
+### Vocabulary expansion (CL / GO / ZP / UBERON)
+
+- **CL (Cell Ontology)** — 65 cell-type entries spanning cnidocyte, T cell / B cell subtypes, alveolar macrophage, Kupffer cell, pancreatic A/B/D, podocyte, keratinocyte, melanocyte, neuronal subtypes, stem cells.
+- **GO biological process / molecular function** — ~56 concrete terms (Wnt / MAPK / BMP / Hippo signalling, apoptotic process, cell cycle, DNA repair, gene expression, oxidative phosphorylation, immune response, regeneration, ATP binding, kinase activity).
+- **ZP zebrafish phenotype** — swim bladder / neural tube / notochord / fin / heart / circulation morphology phenotypes in the canonical `<entity> <quality>, abnormal` form.
+
+### Concept-layer table
+
+Concept lookup is now layered with a documented priority ladder (paper-modelling vocab > OLS4 corpus > bio.tools > single-ontology indexes). The README now lists every layer + its source ontologies in a table.
+
+### `xrefs[slot]` shape for anatomy hits
+
+Anatomy resolvers now return `{"curie", "label", "ontology", "description"}` matching the concept-resolver shape, plus an additional `"species"` key when the hit came from an organism-specific ontology via a species hint.
+
+
 ## v0.11.0 — Real-corpus smoke test on 16 papers, 45 claims (2026-05-28)
 
 Expands ``examples/test_on_papers.py`` from the 2-paper / 10-claim

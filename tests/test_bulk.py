@@ -1106,6 +1106,112 @@ def test_accession_to_curie_table(accession, expected):
     assert accession_to_curie(accession) == expected
 
 
+# --- Pathway-database accession recognition (indicium-adapters #1) ---------
+#
+# The spec proposes REACTOME / KEGG / WP as the canonical pathway-DB
+# prefixes used by the ``enriched_in_pathway`` qualifier. For these
+# prefixes to do real work, ``enrich_claim`` must recognise bare pathway
+# identifiers (e.g. ``R-HSA-9012999``, ``hsa04310``, ``WP554``) and lift
+# them to a prefixed CURIE the same way it lifts ``GSE168938`` to
+# ``GEO:GSE168938``.
+
+@pytest.mark.parametrize(
+    "identifier, expected",
+    [
+        # Reactome: ``R-{3-letter species}-{digits}``.
+        ("R-HSA-9012999", "REACTOME:R-HSA-9012999"),   # canonical Wnt signaling
+        ("R-HSA-201681",  "REACTOME:R-HSA-201681"),    # TCF dependent signaling
+        ("R-MMU-201681",  "REACTOME:R-MMU-201681"),    # mouse equivalent
+        ("R-DRE-9012999", "REACTOME:R-DRE-9012999"),   # zebrafish
+        ("R-DME-9012999", "REACTOME:R-DME-9012999"),   # Drosophila
+        # KEGG pathway: 2-4 letter org prefix + 5 digits.
+        ("hsa04310", "KEGG:hsa04310"),                 # Wnt signaling pathway
+        ("mmu04150", "KEGG:mmu04150"),                 # mTOR signaling
+        ("map04310", "KEGG:map04310"),                 # reference map
+        ("ko04310",  "KEGG:ko04310"),                  # orthology map
+        # WikiPathways: ``WP`` + 1-7 digits, optional revision suffix.
+        ("WP554",         "WP:WP554"),                 # statin pathway
+        ("WP15",          "WP:WP15"),                  # short stable id
+        ("WP554_r118500", "WP:WP554_r118500"),         # with revision tail
+    ],
+)
+def test_pathway_accession_to_curie(identifier, expected):
+    """Pathway-DB identifiers lift to prefixed CURIEs via the same
+    ``accession_to_curie`` registry as repository accessions."""
+    assert accession_to_curie(identifier) == expected
+
+
+@pytest.mark.parametrize(
+    "not_a_pathway",
+    [
+        "R-HSA-",       # missing digits
+        "R-Hsa-201681", # mixed-case species code
+        "R-HSAA-201",   # 4-letter species code (Reactome uses exactly 3)
+        "Hsa04310",     # uppercase initial (KEGG uses lowercase)
+        "hsa0431",      # only 4 digits
+        "hsa043100",    # 6 digits — too many for KEGG
+        "WP",           # no digits
+        "WPX554",       # non-digit between WP and number
+    ],
+)
+def test_non_pathway_strings_do_not_misroute_to_pathway_prefix(not_a_pathway):
+    """Edge cases that should NOT be recognised as pathway accessions.
+
+    Important for the ``enriched_in_pathway`` resolver dispatch:
+    misrouting a near-miss to ``REACTOME:`` / ``KEGG:`` / ``WP:`` would
+    poison downstream RDF with non-existent identifiers. The accession
+    resolver runs first, so any false positive here would override the
+    gene resolver.
+    """
+    result = accession_to_curie(not_a_pathway)
+    assert result is None or not result.startswith(("REACTOME:", "KEGG:", "WP:"))
+
+
+def test_enriched_in_pathway_resolves_reactome_object_end_to_end():
+    """The ``enriched_in_pathway`` qualifier dispatches through the default
+    priority (accession > gene > concept), so a bare Reactome identifier
+    in the object slot must lift to a ``REACTOME:`` CURIE.
+
+    Pins the headline end-to-end behaviour the spec asks for:
+    ``WNT_TARGETS enriched_in_pathway R-HSA-9012999`` resolves to
+    ``REACTOME:R-HSA-9012999`` on the object slot, while the subject
+    (a gene-set label) falls through to a concept-index miss without
+    poisoning the claim.
+    """
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "R-HSA-9012999",
+    })
+    assert out["ontology_terms"]["object"] == "REACTOME:R-HSA-9012999"
+    assert (
+        out["ontology_term_justifications"]["object"] == "semapv:CompositeMatching"
+    ), "accession-resolver path should report CompositeMatching justification"
+
+
+def test_enriched_in_pathway_resolves_kegg_object_end_to_end():
+    """KEGG pathway-id end-to-end through ``enriched_in_pathway``."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "MAPK_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "hsa04310",
+    })
+    assert out["ontology_terms"]["object"] == "KEGG:hsa04310"
+
+
+def test_enriched_in_pathway_resolves_wikipathways_object_end_to_end():
+    """WikiPathways pathway-id end-to-end through ``enriched_in_pathway``."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "STATIN_TARGETS",
+        "qualifier": "enriched_in_pathway",
+        "object": "WP554",
+    })
+    assert out["ontology_terms"]["object"] == "WP:WP554"
+
+
 # --- SHACL ------------------------------------------------------------------
 
 

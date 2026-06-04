@@ -20,6 +20,17 @@ The package is a pure-function claim enricher. It does no LLM extraction, makes 
 
 The two qualifier sets are disjoint by construction (enforced by `tests/test_composition.py`), so a composed adapter via `compose_adapters` produces a clean union with no shadowing.
 
+### Deliberate divergence from indicium-adapters #1
+
+The [indicium-adapters #1 spec](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) proposes a single `TranscriptomicsAdapter` with `domain_id = "transcriptomics"`. This package ships two siblings instead:
+
+* `bulk-transcriptomics` for study-level and bulk-feature claims (the dominant case);
+* `single-cell-transcriptomics` for assertions that require per-cell or per-spot resolution (`marker_of_cell_type`, `enriched_in_cluster`, `localized_in_tissue`, `localized_in_spatial_domain`).
+
+Rationale: the two qualifier families describe semantically different data sources (a `marker_of_cell_type` claim cannot be made without scRNA / spatial data; a `differentially_expressed_in` claim usually cannot be made FROM scRNA / spatial data without aggregation). Encoding the split as two adapters lets `test_composition.py` enforce qualifier disjointness as a structural invariant — a property a single 18-qualifier frozenset would lose. The metabolomics reference repo also ships three classes (`MetabolomicsAdapter`, `MetaboKGAdapter`, `EMIAdapter`) rather than one, so the spec's singleton entry-point is a convention rather than a hard constraint.
+
+A unifying `TranscriptomicsAdapter` umbrella class that delegates to the two siblings by qualifier may be added later if downstream consumers need the canonical `domain_id == "transcriptomics"` entry-point. For now, use `compose_adapters([bulk, sc])` to get the union behaviour.
+
 ## What it resolves
 
 **Gene names** across six organisms (254,922 rows total) from HGNC, MGI, FlyBase, WormBase, ZFIN, plus the *Nematostella vectensis* G2V2 cross-reference (JGI Nemve1 + NvERTx + NVE + Nv2g + UniProt). Symbol-level collisions across organisms (`MAPK1` vs `Mapk1` vs `mapk1`) are disambiguated by an optional `species` claim hint or a casing heuristic (UPPERCASE for human, Title-case for mouse, `xxx-N` for *C. elegans*). Direct accession lookups (HGNC, MGI, FlyBase, WormBase, ZFIN, Nemve1, UniProt) bypass the disambiguation.
