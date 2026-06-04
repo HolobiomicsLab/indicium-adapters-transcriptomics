@@ -1,4 +1,4 @@
-"""Real-LLM smoke test for the v0.13 spec-aligned qualifiers.
+"""Real-LLM smoke test for the v0.13 / v0.14 spec-aligned qualifiers.
 
 This script answers the feature-correctness question that the synthetic
 ``perspicacite_integration.py`` cannot: when a real LLM (Claude sonnet-4-5
@@ -71,6 +71,31 @@ Both fixes are graceful-degradation rules: they fire only when the
 strict primary lookup misses, so the success path is unchanged. Pinned
 by ``tests/test_bulk.py::test_enriched_in_pathway_resolves_embedded_*``
 and ``::test_concept_resolver_trims_common_trailing_nouns``.
+
+Findings — v0.14 SSSOM run (2026-06-04, same model, post-SSSOM-wiring):
+
+* Qualifier choice: 4/4 (unchanged).
+* Subject + object enrichment: 4/4 (unchanged).
+* SSSOMMapping emission: 5 fragments total across the 4 passages, all
+  round-tripping through ``indicium.generated.model.SSSOMMapping(**fragment)``:
+  - upreg    1 fragment   ``asb.lex:wnt4 -> HGNC:12783``
+                          predicate ``skos:exactMatch``, confidence 0.95
+  - downreg  1 fragment   ``asb.lex:mmp9 -> HGNC:7176``
+                          predicate ``skos:exactMatch``, confidence 0.95
+  - marker   2 fragments  ``asb.lex:mmp9 -> HGNC:7176``
+                          (exactMatch, 0.95) + ``asb.lex:cnidocyte_cells
+                          -> CL:0011029`` (closeMatch, 0.80 trimmed_concept)
+  - pathway  1 fragment   ``asb.lex:reactome_r_hsa_9012999
+                          -> REACTOME:R-HSA-9012999``
+                          (closeMatch, 0.85 embedded_pathway — the LLM
+                          emitted the pre-prefixed CURIE, which goes
+                          through the substring-scan fallback because
+                          the strict regex requires bare IDs).
+
+The exactMatch / closeMatch split is meaningful end-to-end: a
+downstream SPARQL consumer filtering on ``predicate = skos:exactMatch``
+keeps only the strict resolutions and drops both LLM-tolerant
+fallbacks correctly.
 """
 from __future__ import annotations
 

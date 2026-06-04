@@ -886,7 +886,7 @@ def resolve_anatomy(
 # trim never bisects a word (``"mesencephalon"`` is not chopped by the
 # ``" cell"`` rule because there is no preceding space). One trim per
 # attempt; no recursion.
-_CONCEPT_TRIM_RULES: tuple[tuple[str, str], ...] = (
+_CONCEPT_TRIM_RULES: Final[tuple[tuple[str, str], ...]] = (
     (" signaling pathway", ""),
     (" signalling pathway", ""),
     (" pathway", ""),
