@@ -144,6 +144,21 @@ class BulkTranscriptomicsAdapter:
         "expressed_in",
         "marker_of",
         "regulated_by",
+        # Spec-aligned (indicium-adapters #1) directional + pathway-specific
+        # variants. ``upregulated_in`` / ``downregulated_in`` are signed
+        # specialisations of ``differentially_expressed_in`` (extractor
+        # picks the signed form when log2FC sign is known, otherwise
+        # falls back to the generic ``differentially_expressed_in``).
+        # ``marker_for`` is the spec-canonical naming alongside the
+        # legacy ``marker_of`` (both stay supported; new claims should
+        # prefer ``marker_for``). ``enriched_in_pathway`` narrows
+        # ``enriched_for`` for claims whose object resolves into
+        # REACTOME / KEGG / WP, with the generic ``enriched_for`` kept
+        # for GO / phenotype / disease enrichment.
+        "upregulated_in",
+        "downregulated_in",
+        "marker_for",
+        "enriched_in_pathway",
         # Study-level assay-metadata assertions. Subject is typically a
         # study or capsule identifier; object is the platform / tool /
         # database literal. Mirrors the metabolomics adapter pattern.
@@ -167,13 +182,33 @@ class BulkTranscriptomicsAdapter:
         """
         return (
             "Domain: bulk transcriptomics. Extra qualifiers available: "
-            "differentially_expressed_in, co_expressed_with, enriched_for, "
-            "expressed_in, marker_of, regulated_by, sequenced_on, "
-            "aligned_with, quantified_with, normalized_with, tested_with, "
-            "uses_database, consolidates_dataset. "
+            "differentially_expressed_in, upregulated_in, downregulated_in, "
+            "co_expressed_with, enriched_for, enriched_in_pathway, "
+            "expressed_in, marker_of, marker_for, regulated_by, "
+            "sequenced_on, aligned_with, quantified_with, normalized_with, "
+            "tested_with, uses_database, consolidates_dataset. "
             "Use canonical gene symbols (HGNC for human, MGI for mouse, "
             "official model-organism database symbols otherwise) for gene "
-            "subjects and objects where possible. Study-level qualifiers "
+            "subjects and objects where possible. "
+            "Direction-of-regulation: prefer the signed specialisations "
+            "``upregulated_in`` / ``downregulated_in`` when the source "
+            "reports a clear direction (positive / negative log2FC, "
+            "explicit 'increased' / 'decreased' wording); fall back to "
+            "``differentially_expressed_in`` when direction is unknown "
+            "or mixed. The signed forms are spec-aligned with the "
+            "indicium-adapters contract; both shapes serialise to the "
+            "same RDF class on the consuming graph store. "
+            "Pathway-vs-general enrichment: use ``enriched_in_pathway`` "
+            "for enrichment results whose object is a REACTOME / KEGG / "
+            "WP pathway (e.g. 'REACTOME:R-HSA-9012999', 'KEGG:hsa04310', "
+            "'WP:WP554'); keep ``enriched_for`` for GO terms, phenotype "
+            "ontology hits, or disease-set enrichment. "
+            "Marker assertions: ``marker_for`` is the spec-canonical "
+            "form (e.g. 'CD3E marker_for T cell'); ``marker_of`` is the "
+            "legacy synonym kept for backward compatibility with claims "
+            "emitted before the spec alignment. Single-cell claims use "
+            "``marker_of_cell_type`` instead. "
+            "Study-level qualifiers "
             "(sequenced_on, aligned_with, quantified_with, normalized_with, "
             "tested_with, uses_database, consolidates_dataset) take a "
             "study / capsule / paper id as subject and a platform / tool / "

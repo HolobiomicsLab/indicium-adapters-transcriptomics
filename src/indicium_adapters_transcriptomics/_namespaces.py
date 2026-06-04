@@ -13,6 +13,7 @@ Sections:
 
 * Biomedical / experimental ontologies (EFO, OBI, STATO, ...).
 * Concept / process / artifact ontologies (INO, NCIT, SIO, RO, IAO).
+* Pathway databases (REACTOME, KEGG, WP / WikiPathways).
 * Gene / transcript identifier authorities (HGNC, MGI, FlyBase, ...).
 * Repository / accession authorities (GEO, SRA, ENA, ArrayExpress, ...).
 """
@@ -47,6 +48,15 @@ NCIT: Final[str] = "http://purl.obolibrary.org/obo/NCIT_"
 SIO: Final[str] = "http://semanticscience.org/resource/SIO_"
 RO: Final[str] = "http://purl.obolibrary.org/obo/RO_"
 IAO: Final[str] = "http://purl.obolibrary.org/obo/IAO_"
+
+# --- Pathway databases ----------------------------------------------------
+# Added to align with the indicium-adapters issue #1 spec, which proposes
+# REACTOME / KEGG / WP as the canonical pathway-DB prefixes. Used by claims
+# whose qualifier is ``enriched_in_pathway`` (e.g. enrichment-analysis
+# results from g:Profiler / Enrichr / topGO / etc.).
+REACTOME: Final[str] = "https://identifiers.org/reactome:"
+KEGG_PATHWAY: Final[str] = "https://identifiers.org/kegg.pathway:"
+WIKIPATHWAYS: Final[str] = "https://identifiers.org/wikipathways:"
 
 # --- Gene / transcript identifier authorities -----------------------------
 
@@ -95,6 +105,10 @@ TRANSCRIPTOMICS_PREFIXES: Final[dict[str, str]] = {
     "SIO": SIO,
     "RO": RO,
     "IAO": IAO,
+    # Pathway databases.
+    "REACTOME": REACTOME,
+    "KEGG": KEGG_PATHWAY,
+    "WP": WIKIPATHWAYS,
     # Gene / transcript identifiers.
     "HGNC": HGNC,
     "MGI": MGI,

@@ -52,6 +52,68 @@ def test_qualifiers_include_core_claim_and_study_terms():
     assert "normalized_with" in qs
 
 
+def test_qualifiers_include_spec_aligned_signed_and_pathway_terms():
+    """indicium-adapters issue #1 alignment: the spec proposes four
+    qualifiers we did not originally ship.
+
+    * Signed direction-of-regulation specialisations of
+      ``differentially_expressed_in``: ``upregulated_in`` and
+      ``downregulated_in``. Extractors use the signed form when the
+      log2FC sign is known, and fall back to the generic version when
+      the direction is unknown or mixed.
+    * ``marker_for``: spec-canonical naming alongside the legacy
+      ``marker_of`` (both stay supported so previously-emitted claims
+      do not break).
+    * ``enriched_in_pathway``: narrows the generic ``enriched_for`` for
+      enrichment results whose object resolves into REACTOME / KEGG /
+      WP.
+
+    Pin them explicitly so a future edit to the qualifier frozenset
+    cannot drop the spec alignment silently.
+    """
+    qs = BulkTranscriptomicsAdapter.qualifiers
+    assert "upregulated_in" in qs
+    assert "downregulated_in" in qs
+    assert "marker_for" in qs
+    assert "enriched_in_pathway" in qs
+    # The legacy ``marker_of`` is kept on purpose for backward
+    # compatibility (claims emitted before the spec alignment used it).
+    assert "marker_of" in qs
+
+
+def test_enrich_signed_de_routes_through_default_priority():
+    """The new ``upregulated_in`` / ``downregulated_in`` qualifiers are
+    feature-level claims, so the dispatcher must use the default
+    accession-then-gene-then-concept priority (not the study-level one).
+
+    Concretely: a claim like ``WNT4 upregulated_in regenerating_oral_pole``
+    must resolve the subject gene to HGNC, exactly as the generic
+    ``differentially_expressed_in`` would.
+    """
+    a = BulkTranscriptomicsAdapter()
+    for qualifier in ("upregulated_in", "downregulated_in"):
+        out = a.enrich_claim({
+            "subject": "WNT4",
+            "qualifier": qualifier,
+            "object": "regenerating_oral_pole",
+        })
+        assert out["ontology_terms"]["subject"] == "HGNC:12783", (
+            f"qualifier {qualifier!r} should still resolve gene subject via default priority"
+        )
+
+
+def test_enrich_marker_for_resolves_gene_subject():
+    """Spec-canonical ``marker_for`` must behave like the legacy
+    ``marker_of``: gene-subject lookup wins on the default priority."""
+    a = BulkTranscriptomicsAdapter()
+    out = a.enrich_claim({
+        "subject": "WNT4",
+        "qualifier": "marker_for",
+        "object": "some cell type",
+    })
+    assert out["ontology_terms"]["subject"] == "HGNC:12783"
+
+
 def test_ontology_prefixes_cover_required_axes():
     p = BulkTranscriptomicsAdapter.ontology_prefixes
     # Experimental / statistical

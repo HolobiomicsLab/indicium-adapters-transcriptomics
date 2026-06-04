@@ -51,7 +51,13 @@ The `enrich_claim()` method picks its resolver chain based on the claim's qualif
 | Qualifier class | Resolver priority | Effect on `STAR` |
 |---|---|---|
 | Study-level (`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`, `tested_with`, `uses_database`) | concept > accession > gene | `STAR` resolves to `biotools:star` |
-| Feature-level (`differentially_expressed_in`, `expressed_in`, `marker_of`, `regulated_by`, `consolidates_dataset`) | accession > gene > concept | `STAR` resolves to `HGNC:11359` |
+| Feature-level (`differentially_expressed_in`, `upregulated_in`, `downregulated_in`, `expressed_in`, `marker_of`, `marker_for`, `regulated_by`, `enriched_for`, `enriched_in_pathway`, `co_expressed_with`, `consolidates_dataset`) | accession > gene > concept | `STAR` resolves to `HGNC:11359` |
+
+The four qualifiers `upregulated_in`, `downregulated_in`, `marker_for` and `enriched_in_pathway` were added in v0.13 to align with the [indicium-adapters #1](https://github.com/HolobiomicsLab/indicium-adapters/issues/1) contract:
+
+- `upregulated_in` / `downregulated_in` are signed specialisations of `differentially_expressed_in` (use them when log2FC sign is known; fall back to the generic form otherwise).
+- `marker_for` is the spec-canonical form alongside the legacy `marker_of` (both stay supported; new claims should prefer `marker_for`).
+- `enriched_in_pathway` narrows `enriched_for` for claims whose object resolves into REACTOME / KEGG / WP pathways (use the generic `enriched_for` for GO / phenotype / disease enrichment).
 
 ## Metadata parsers
 
@@ -166,7 +172,7 @@ enriched_gene = bulk.enrich_claim({
 composite = compose_adapters([bulk, sc])
 ```
 
-The 13 bulk-adapter qualifiers cover claim-level feature assertions (`differentially_expressed_in`, `co_expressed_with`, `enriched_for`, `expressed_in`, `marker_of`, `regulated_by`) and study-level assay metadata (`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`, `tested_with`, `uses_database`, `consolidates_dataset`).
+The 17 bulk-adapter qualifiers cover claim-level feature assertions (`differentially_expressed_in`, `upregulated_in`, `downregulated_in`, `co_expressed_with`, `enriched_for`, `enriched_in_pathway`, `expressed_in`, `marker_of`, `marker_for`, `regulated_by`) and study-level assay metadata (`sequenced_on`, `aligned_with`, `quantified_with`, `normalized_with`, `tested_with`, `uses_database`, `consolidates_dataset`).
 
 The 5 single-cell-adapter qualifiers (`marker_of_cell_type`, `enriched_in_cluster`, `co_expressed_in_cell_type`, `localized_in_tissue`, `localized_in_spatial_domain`) cover assertions that only make sense at per-cell or per-spot resolution.
 
