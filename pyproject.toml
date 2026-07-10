@@ -33,11 +33,10 @@ dependencies = [
 [project.optional-dependencies]
 # pydantic is pulled in because v0.14 tests import indicium's generated
 # pydantic models (SSSOMMapping, Evidence, WorkflowCoupling) for
-# round-trip validation. indicium itself does not declare pydantic in
-# its runtime deps even though its generated/model.py imports it
-# (verified against indicium v1.11.0 pyproject); reported separately
-# for an upstream fix. Pin >=2 since indicium's generated models are
-# pydantic v2 BaseModel subclasses.
+# round-trip validation. As of indicium-standard 2.0.0, pydantic>=2.0 is a
+# hard runtime dep of indicium-standard, so it arrives transitively; this
+# explicit dev pin is now defensive/redundant. Pin >=2 since indicium's
+# generated models are pydantic v2 BaseModel subclasses.
 dev = ["pytest>=8", "pytest-cov>=4", "ruff>=0.5", "pydantic>=2"]
 # Build-time only: needed by the maintainer scripts under data/build_*.py.
 # Not required to run the adapter or its tests.
