@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "indicium-adapters>=0.4.0",
-    "indicium>=1.11",
+    "indicium-standard>=2.0.0",
     "rdflib>=7.0",
     "pyshacl>=0.25",
 ]
@@ -58,7 +58,7 @@ Changelog = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics
 # [tool.uv.sources]. Without this, `uv sync`/`uv run` re-resolve `indicium>=1.4`
 # from PyPI (an unrelated 0.1.0a3) and fail.
 [tool.uv.sources]
-indicium = { path = "../indicium", editable = true }
+indicium-standard = { path = "../indicium", editable = true }
 indicium-adapters = { path = "../indicium-adapters", editable = true }
 
 [tool.hatch.build.targets.wheel]
