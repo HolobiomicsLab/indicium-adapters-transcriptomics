@@ -343,7 +343,7 @@ def _render_claim_as_rdf(graph: rdflib.Graph, idx: int, enriched: dict) -> None:
     Each claim becomes a node ``asb:claim_<idx>`` typed ``asb:Claim``, with
     one literal property per resolved slot (subject, object).
     """
-    asb = rdflib.Namespace("https://w3id.org/asb/")
+    asb = rdflib.Namespace("https://w3id.org/asb#")
     claim_iri = asb[f"claim_{idx}"]
     graph.add((claim_iri, rdflib.RDF.type, asb.Claim))
     for slot, curie in (enriched.get("ontology_terms") or {}).items():

@@ -1,6 +1,6 @@
 @prefix sh:    <http://www.w3.org/ns/shacl#> .
 @prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-@prefix asb:   <http://holobiomicslab.org/asb/> .
+@prefix asb:   <https://w3id.org/asb#> .
 @prefix tx:    <http://holobiomicslab.org/adapters/transcriptomics/> .
 
 # v0.1.0 — minimal ASB claim CURIE-format validation only.
