@@ -24,6 +24,9 @@ Both share:
   rows across six organisms; `ANATOMY_INDEX` over UBERON;
   `CONCEPT_INDEX` over 19 ontology sources for ~447 entries).
 - The `TRANSCRIPTOMICS_PREFIXES` CURIE-prefix map in `_namespaces.py`.
+- The classification vocabulary (`primary_domain` = `transcriptomics`,
+  `subdomains`, `techniques`) in `_vocabulary.py`, declared identically
+  by both adapters and unioned by ASB's classification layer.
 - The repository-accession resolver in `_registries.py`.
 - The SHACL shapes graph in `shapes/transcriptomics.shapes.ttl`.
 

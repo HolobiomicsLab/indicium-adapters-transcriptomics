@@ -30,6 +30,10 @@ from indicium_adapters_transcriptomics._registries import (
     accession_to_curie,
     find_embedded_pathway_curie,
 )
+from indicium_adapters_transcriptomics._vocabulary import (
+    TRANSCRIPTOMICS_SUBDOMAINS,
+    TRANSCRIPTOMICS_TECHNIQUES,
+)
 
 __all__ = ["BulkTranscriptomicsAdapter", "accession_to_curie"]
 
@@ -165,6 +169,16 @@ class BulkTranscriptomicsAdapter:
     domain_id = "bulk-transcriptomics"
     api_version = 1
     default_workflow_coupling: str = "loose"
+
+    # ASB's classification layer reads ``primary_domain`` in preference to
+    # ``domain_id``; it is what groups this adapter with its single-cell
+    # sibling into one field. Both siblings declare the same package-level
+    # vocabulary, which the consumer unions (see ``_vocabulary``).
+    primary_domain: str = "transcriptomics"
+    # From the 2026-08-25 cross-domain vocabulary audit: a term two sciences
+    # both declare cannot tell them apart, so shared terms were dropped.
+    subdomains: tuple[str, ...] = TRANSCRIPTOMICS_SUBDOMAINS
+    techniques: tuple[str, ...] = TRANSCRIPTOMICS_TECHNIQUES
 
     # Every qualifier MUST match ``^[a-z][a-z0-9_]*$`` (snake_case).
     # Required by indicium >= 1.7.0: at serialisation time, Perspicacite

@@ -2,7 +2,9 @@
 
 Mirrors the metabolomics package's ``test_composition.py`` contract: sibling
 adapters in the same wheel MUST have disjoint qualifier sets so a composed
-adapter's qualifier vocabulary is a clean union with no shadowing.
+adapter's qualifier vocabulary is a clean union with no shadowing. The
+classification vocabulary is the opposite case: it is package-level, so both
+siblings must declare the same terms under the same ``primary_domain``.
 """
 from __future__ import annotations
 
@@ -11,6 +13,10 @@ from indicium_adapters import compose_adapters, discover_adapters
 from indicium_adapters_transcriptomics import (
     BulkTranscriptomicsAdapter,
     SingleCellTranscriptomicsAdapter,
+)
+from indicium_adapters_transcriptomics._vocabulary import (
+    TRANSCRIPTOMICS_SUBDOMAINS,
+    TRANSCRIPTOMICS_TECHNIQUES,
 )
 
 
@@ -51,3 +57,21 @@ def test_compose_adapters_unions_qualifiers():
         | SingleCellTranscriptomicsAdapter.qualifiers
     )
     assert composite.qualifiers == expected_qualifiers
+
+
+def test_both_adapters_declare_the_transcriptomics_primary_domain():
+    """ASB groups sibling adapters into one field by ``primary_domain``. An
+    adapter that declares none contributes no domain, and its papers
+    classify as "other"."""
+    assert BulkTranscriptomicsAdapter.primary_domain == "transcriptomics"
+    assert SingleCellTranscriptomicsAdapter.primary_domain == "transcriptomics"
+
+
+def test_classification_vocabulary_is_shared_by_both_adapters():
+    """Unlike qualifiers, subdomains and techniques are package-level: the
+    consumer unions them into one set, so a divergent sibling would silently
+    widen the declared vocabulary."""
+    assert BulkTranscriptomicsAdapter.subdomains == TRANSCRIPTOMICS_SUBDOMAINS
+    assert SingleCellTranscriptomicsAdapter.subdomains == TRANSCRIPTOMICS_SUBDOMAINS
+    assert BulkTranscriptomicsAdapter.techniques == TRANSCRIPTOMICS_TECHNIQUES
+    assert SingleCellTranscriptomicsAdapter.techniques == TRANSCRIPTOMICS_TECHNIQUES

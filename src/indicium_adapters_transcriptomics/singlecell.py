@@ -25,6 +25,10 @@ from indicium_adapters_transcriptomics._enrichment import (
     resolve_gene,
 )
 from indicium_adapters_transcriptomics._namespaces import TRANSCRIPTOMICS_PREFIXES
+from indicium_adapters_transcriptomics._vocabulary import (
+    TRANSCRIPTOMICS_SUBDOMAINS,
+    TRANSCRIPTOMICS_TECHNIQUES,
+)
 
 __all__ = ["SingleCellTranscriptomicsAdapter"]
 
@@ -76,6 +80,16 @@ class SingleCellTranscriptomicsAdapter:
     # the bulk sibling. Set by the spec on Evidence nodes derived from
     # these claims (indicium >= 1.10.0, Suter et al. 2025).
     default_workflow_coupling: str = "loose"
+
+    # ASB's classification layer reads ``primary_domain`` in preference to
+    # ``domain_id``; it is what groups this adapter with its bulk sibling
+    # into one field. Both siblings declare the same package-level
+    # vocabulary, which the consumer unions (see ``_vocabulary``).
+    primary_domain: str = "transcriptomics"
+    # From the 2026-08-25 cross-domain vocabulary audit: a term two sciences
+    # both declare cannot tell them apart, so shared terms were dropped.
+    subdomains: tuple[str, ...] = TRANSCRIPTOMICS_SUBDOMAINS
+    techniques: tuple[str, ...] = TRANSCRIPTOMICS_TECHNIQUES
 
     # Every qualifier MUST match ``^[a-z][a-z0-9_]*$`` (snake_case).
     # Required by indicium >= 1.7.0: at serialisation time, Perspicacite
