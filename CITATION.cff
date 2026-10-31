@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: indicium-adapters-transcriptomics
 message: "If you use this software, please cite it as below."
 type: software
-version: 0.2.0
-date-released: "2026-05-26"
+version: 0.14.0
+date-released: "2026-06-04"
 authors:
   - family-names: Boukhajou
     given-names: Dina
@@ -20,8 +20,8 @@ keywords:
   - indicium
   - domain-adapter
 abstract: >-
-  Transcriptomics-domain DomainAdapters for the indicium ecosystem.
-  v0.1.0 ships TranscriptomicsAdapter (bulk RNA-seq / microarray /
-  time-series claims, repository-accession enrichment). A sibling
-  SingleCellTranscriptomicsAdapter with CL + UBERON enrichment is
-  scheduled for v0.2.0.
+  Transcriptomics-domain DomainAdapters for the indicium ecosystem:
+  BulkTranscriptomicsAdapter for bulk RNA-seq, microarray and
+  time-series expression claims plus study-level assay metadata, and
+  SingleCellTranscriptomicsAdapter for cell-type markers, cluster
+  enrichment and spatial localisation.

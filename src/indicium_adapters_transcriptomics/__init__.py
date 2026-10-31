@@ -17,11 +17,13 @@ and ``CHANGELOG.md`` for the release-by-release history.
 """
 from __future__ import annotations
 
+from importlib.metadata import version
+
 from indicium_adapters_transcriptomics._registries import accession_to_curie
 from indicium_adapters_transcriptomics.bulk import BulkTranscriptomicsAdapter
 from indicium_adapters_transcriptomics.singlecell import SingleCellTranscriptomicsAdapter
 
-__version__ = "0.11.0"
+__version__ = version("indicium-adapters-transcriptomics")
 __all__ = [
     "BulkTranscriptomicsAdapter",
     "SingleCellTranscriptomicsAdapter",
