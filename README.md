@@ -83,11 +83,15 @@ Each parser detects a recognised organism in the metadata and attaches a `specie
 
 ## Install
 
+This package is not published on PyPI; the repository is private for now. Install it from a checkout:
+
 ```bash
-pip install indicium-adapters-transcriptomics
+git clone <repository-url>
+cd indicium-adapters-transcriptomics
+pip install -e .
 ```
 
-`indicium` and `indicium-adapters` are not on PyPI yet; if installing from source, pull them from git first.
+The core package `indicium-adapters` (0.6.0) and its dependency `indicium-standard` are on PyPI and are installed automatically.
 
 ## Usage
 
