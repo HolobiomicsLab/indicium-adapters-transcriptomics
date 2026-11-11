@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- 2026-11-11: CI and development installs now use the published dependencies from PyPI.
+
 ## v0.14.0 — Full indicium-adapters #1 alignment: SSSOMMapping + workflow_coupling (2026-06-04)
 
 ### SKOS predicate routing + fallback-kind confidence

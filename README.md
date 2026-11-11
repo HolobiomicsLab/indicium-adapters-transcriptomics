@@ -88,10 +88,13 @@ This package is not published on PyPI; the repository is private for now. Instal
 ```bash
 git clone <repository-url>
 cd indicium-adapters-transcriptomics
-pip install -e .
 ```
 
-The core package `indicium-adapters` (0.6.0) and its dependency `indicium-standard` are on PyPI and are installed automatically.
+The public dependencies are installed from PyPI with the development extra:
+
+```bash
+python -m pip install -e ".[dev]"
+```
 
 ## Usage
 
@@ -228,7 +231,6 @@ The package ships with two runnable demonstrations under `examples/`:
 ```bash
 git clone https://github.com/holobiomicslab/indicium-adapters-transcriptomics
 cd indicium-adapters-transcriptomics
-pip install -e .[dev]
 pytest
 ```
 
