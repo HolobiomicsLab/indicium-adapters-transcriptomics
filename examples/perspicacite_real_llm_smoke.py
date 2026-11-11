@@ -34,6 +34,7 @@ What's *not* verified:
 Run::
 
     $env:PYTHONPATH = "C:\\path\\to\\Perspicacite-AI\\src"
+    $env:PERSPICACITE_ROOT = "C:\\path\\to\\Perspicacite-AI"
     py -3.13 examples/perspicacite_real_llm_smoke.py
 
 Requires ``ANTHROPIC_API_KEY`` in Perspicacite-AI's ``.env`` (load_dotenv
@@ -100,18 +101,11 @@ fallbacks correctly.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
-
-# Perspicacite ships its .env at the sibling repo's root, not here. We
-# resolve the path explicitly so the test runs from anywhere instead of
-# silently failing when launched from a directory above Perspicacite-AI.
-_PERSPICACITE_ROOT = Path(
-    r"C:\Users\spirale\Documents\Logiciels_stage_GB5\Perspicacite-AI"
-)
-
 
 try:
     from dotenv import load_dotenv
@@ -214,9 +208,14 @@ async def run() -> int:
     print("v0.13 spec-alignment real-LLM smoke test (Claude sonnet-4-5)")
     print("=" * 72)
 
+    perspicacite_root = os.environ.get("PERSPICACITE_ROOT")
+    if not perspicacite_root:
+        sys.stderr.write("[fatal] set PERSPICACITE_ROOT to the Perspicacite-AI checkout\n")
+        return 2
+
     # Load .env from Perspicacite-AI's repo root — that's where the
     # Anthropic key lives.
-    env_path = _PERSPICACITE_ROOT / ".env"
+    env_path = Path(perspicacite_root).expanduser() / ".env"
     if not env_path.exists():
         sys.stderr.write(f"[fatal] expected .env at {env_path}\n")
         return 2

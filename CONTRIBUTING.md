@@ -8,12 +8,14 @@ The 4-quadrant filter for new features lives at the top of `ROADMAP.md`.
 ```bash
 git clone https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics
 cd indicium-adapters-transcriptomics
-pip install -e .[dev]
-pytest
 ```
 
-`indicium` and `indicium-adapters` are private repos at the moment; pull them
-from git first if you don't already have access via PyPI.
+The public dependencies are installed from PyPI with the development extra:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest
+```
 
 ## Pull requests
 

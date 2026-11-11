@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-    "indicium-adapters>=0.4.0",
+    "indicium-adapters>=0.6.0",
     "indicium-standard>=2.0.0",
     "rdflib>=7.0",
     "pyshacl>=0.25",
@@ -51,14 +51,6 @@ Homepage = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics"
 Repository = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics"
 Issues = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics/issues"
 Changelog = "https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics/blob/main/CHANGELOG.md"
-
-# Local-dev resolution for the sibling repos (not published to PyPI at >=1.4).
-# uv-only; stripped from the published wheel. Mirrors indicium-adapters' own
-# [tool.uv.sources]. Without this, `uv sync`/`uv run` re-resolve `indicium>=1.4`
-# from PyPI (an unrelated 0.1.0a3) and fail.
-[tool.uv.sources]
-indicium-standard = { path = "../indicium", editable = true }
-indicium-adapters = { path = "../indicium-adapters", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/indicium_adapters_transcriptomics"]
