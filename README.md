@@ -83,10 +83,10 @@ Each parser detects a recognised organism in the metadata and attaches a `specie
 
 ## Install
 
-This package is not published on PyPI; the repository is private for now. Install it from a checkout:
+This package is not published on PyPI; the repository is public. Install it from a checkout:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/HolobiomicsLab/indicium-adapters-transcriptomics
 cd indicium-adapters-transcriptomics
 ```
 
